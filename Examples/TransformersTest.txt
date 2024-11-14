@@ -1,0 +1,7 @@
+Squence lenth effect on Results 
+
+seq_length = 96
+Evaluation MSE Loss: 0.3232
+
+seq_length = 192
+Evaluation MSE Loss: 0.3058

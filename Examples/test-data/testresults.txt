@@ -1,8 +1,0 @@
-LSTM 
-Evaluation MSE Loss: 0.4642
-
-GRU 
-Evaluation MSE Loss: 0.6727
-
-Transformer 
-Evaluation MSE Loss: 0.4153

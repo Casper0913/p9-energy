@@ -17,6 +17,6 @@ SCRIPT=$1
 # Print out the script arguments for debugging
 echo "SCRIPT: $SCRIPT"
 
-singularity exec -nv /P9Project/pytorch_24.11.sif python3 $SCRIPT
+singularity exec -nv /energytransformer python3 $SCRIPT
 
  

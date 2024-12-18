@@ -1,0 +1,2 @@
+model,accuracy,params
+SARIMAX_336_24,1200.954881676135,"{'order': (0, 1, 1), 'seasonal_order': (1, 1, 2, 12), 'trend': None}"

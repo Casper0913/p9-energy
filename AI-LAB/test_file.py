@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 # Correct the file path to the actual location of the CSV file
-df = pd.read_csv('Dataset/ConsumptionIndustry.csv', sep=';')
+df = pd.read_csv('ConsumptionIndustry.csv', sep=';')
 
 # Convert HourDK to datetime
 df['HourDK'] = pd.to_datetime(df['HourDK'])

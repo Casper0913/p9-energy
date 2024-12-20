@@ -342,13 +342,11 @@ for epochs in range(num_epochs):
         if patience_counter >= patience:
             print(f"Best Validation Loss: {best_val_loss}")
             torch.save(model.state_dict(), 'Training_data/Transfomer_long.pth')
-            # torch.save(model.state_dict(), '/content/drive/My Drive/energy_transformer.pth')
             break
 
     if patience_counter >= patience:
         print("Early Stopping")
         torch.save(model.state_dict(), 'Training_data/Transfomer_long.pth')
-        # torch.save(model.state_dict(), '/content/drive/My Drive/energy_transformer.pth')
         break
 
 
@@ -381,10 +379,6 @@ with torch.no_grad():  # Disable gradient tracking
         true_values.append(targets.cpu().numpy())
 
 
-# Flatten the list of NumPy arrays (from multiple batches) into a single array
-# predictions = np.concatenate(predictions, axis=0)
-# true_values = np.concatenate(true_values, axis=0)
-
 # Convert predictions and true values to NumPy arrays if they are lists
 predictions = np.concatenate(predictions, axis=0)
 true_values = np.concatenate(true_values, axis=0)
@@ -413,7 +407,6 @@ r2 = r2_score(true_values, predictions)
 
 # Print the performance metrics
 print("Energy Transformer Model Performance:")
-print("Total Traning time: 9min 23sec")
 print("-------------------------------------")
 print(f"Mean Absolute Error: {mae:.2f}")
 print(f"Mean Squared Error: {mse:.2f}")
@@ -430,44 +423,6 @@ results = {'mae': mae, 'mse': mse, 'rmse': rmse,
            'r2': r2, 'mase': mase, 'sMAPE': sMAPE, 'mape': mape}
 results_df = pd.DataFrame(results, index=[0])
 results_df.to_csv('Training_data/energy_transformer_results.csv', index=False)
-
-
-# Plot the first week of predictions
-plt.figure(figsize=(14, 7))
-plt.plot(true_values[:24*7], label='Actual Consumption')
-plt.plot(predictions[:24*7], label='Predicted Consumption', linestyle='--')
-plt.title("Energy Consumption Prediction for the First Week")
-plt.xlabel("Hour")
-plt.ylabel("Energy Consumption (kWh)")
-plt.legend()
-plt.grid(True)
-plt.savefig('Training_data/energy_transformer_predictions.png', dpi=900)
-
-# Plot the entire test set
-plt.figure(figsize=(14, 7))
-plt.plot(true_values, label='Actual', color='blue', alpha=0.6)
-plt.plot(predictions, label='Predicted',
-         linestyle='--', color='red', alpha=0.6)
-plt.title("Predicted vs Actual Energy Consumption")
-plt.xlabel("Hour")
-plt.ylabel("Energy Consumption (kWh)")
-plt.legend()
-plt.grid(True)
-plt.savefig('Training_data/energy_transformer_predictions_full.png', dpi=900)
-
-
-# Scatter plot of the actual vs predicted values
-plt.figure(figsize=(10, 6))
-plt.scatter(true_values, predictions, alpha=0.5)
-plt.plot([min(true_values), max(true_values)], [min(true_values), max(true_values)],
-         color='red', linewidth=2, label="Ideal (y = x)")
-plt.xlabel("Actual Consumption (kWh)")
-plt.ylabel("Predicted Consumption (kWh)")
-plt.title("Prediction vs Actual")
-plt.legend()
-plt.grid(True)
-plt.savefig('Training_data/energy_transformer_scatter.png', dpi=900)
-
 
 # Save the predictions and true values to a CSV file
 results = pd.DataFrame({'Actual': true_values.flatten(),

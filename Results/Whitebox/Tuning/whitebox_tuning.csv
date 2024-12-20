@@ -1,3 +1,5 @@
 model,accuracy,params
-SARIMAX_1440_336,3711.1313582108182,"{'order': (2, 0, 0), 'seasonal_order': (1, 1, 0, 12), 'trend': 'ct'}"
+SARIMAX_1440_336,3711.131358210818,"{'order': (2, 0, 0), 'seasonal_order': (1, 1, 0, 12), 'trend': 'ct'}"
 SARIMAX_336_24,1200.954881676135,"{'order': (0, 1, 1), 'seasonal_order': (1, 1, 2, 12), 'trend': None}"
+SARIMA_1440_336,5312.450240110233,"{'order': (0, 0, 2), 'seasonal_order': (2, 0, 2, 12)}"
+SARIMA_336_24,1181.1501726204267,"{'order': (1, 1, 1), 'seasonal_order': (1, 1, 2, 12)}"

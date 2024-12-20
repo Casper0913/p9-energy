@@ -92,9 +92,9 @@ def safe_objective(trial):
 
 if __name__ == '__main__':
   date_start = '2023-11-01'
-  window_train_size = 365*3 #hours
-  forecast_horizon = 366 #hours
-  # 336_24, 1440_336, 365*3_366
+  window_train_size = 365*24*2 #hours
+  forecast_horizon = 365*24 #hours
+  # 336_24, 1440_336, 17520_8760
 
   trials = 100
   model_name = f'SARIMA_{window_train_size}_{forecast_horizon}'

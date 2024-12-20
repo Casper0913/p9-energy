@@ -1,6 +1,7 @@
 """ Code for black box tuning of the hyperparameters of different models """
 
 from datetime import datetime, timedelta
+import math
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,58 +11,86 @@ import optuna  # Hyperparameter optimization
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 
 class EnergyTransformer(nn.Module):
-    def __init__(self, input_size, d_model, nhead, output_size, num_encoder_layers, num_decoder_layers, dim_feedforward, dropout=0.1):
+    def __init__(self, input_size, d_model, nhead, output_size, num_encoder_layers, num_decoder_layers, dim_feedforward, dropout):
         super(EnergyTransformer, self).__init__()
-        self.input_size = input_size
+        self.embedding = nn.Embedding(input_size, d_model)
         self.d_model = d_model
-        self.embedding = nn.Linear(input_size, d_model)  # Embedding layer
-        self.positional_encoding = nn.Parameter(
-            torch.zeros(1, 1000, d_model))  # Replace nn.Embedding
-        # self.positional_encoding = nn.Parameter(torch.zeros(1, 1000, d_model)) # Positional encoding
         self.transformer = nn.Transformer(
-            d_model=d_model, nhead=nhead, num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers, dim_feedforward=dim_feedforward,
-            dropout=dropout, batch_first=True
+            d_model=d_model,
+            nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            batch_first=True
         )
         self.fc_out = nn.Linear(d_model, output_size)
 
+        # Positional encoding initialization
+        self.register_buffer("positional_encoding",
+                             self.get_positional_encoding(512, d_model))
+
+    def get_positional_encoding(self, max_seq_len, d_model):
+        pos = torch.arange(max_seq_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2)
+                             * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_seq_len, d_model)
+        pe[:, 0::2] = torch.sin(pos * div_term)
+        pe[:, 1::2] = torch.cos(pos * div_term)
+        return pe.unsqueeze(0)
+
     def forward(self, x):
-        x = self.embedding(x) + self.positional_encoding[:, :x.size(1), :]
-        output = self.transformer(x, x)
-        return self.fc_out(output[:, -1, :])
+        # print(f"x shape: {x.shape}, x dtype: {x.dtype}")
+        seq_len = x.size(1)
+        x = x.long()  # or x = x.int()
+        x = self.embedding(x) * math.sqrt(self.d_model)
+        x = x + self.positional_encoding[:, :seq_len, :]
+        x = self.transformer(x, x)  # Assuming input is both src and tgt
+        return self.fc_out(x[:, -1, :])  # Output for the last sequence step
 
 
 class EnergyLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.0):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout):
         super(EnergyLSTM, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size,
-                            num_layers, batch_first=True, dropout=dropout)
+
+        if num_layers == 1:
+            dropout = 0  # Set dropout to 0 if only one layer is used
+
+        self.gru = nn.LSTM(input_size, hidden_size,
+                           num_layers=num_layers, dropout=dropout, batch_first=True)
         self.fc_out = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        lstm_out, _ = self.lstm(x)
-        if len(lstm_out.shape) == 2:
-            # No squeeze for single sequence
-            return self.fc_out(lstm_out[:, -1])
+        # Forward pass through GRU
+        gru_out, _ = self.gru(x)
+        if gru_out.dim() == 2:
+            last_output = gru_out
         else:
-            # Squeeze the batch dimension if present
-            # Squeeze the extra dimension
-            return self.fc_out(lstm_out[:, -1, :].squeeze(1))
+            last_output = gru_out[:, -1, :]
+        output = self.fc_out(last_output)
+        return output
 
 
 class EnergyGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.1):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout):
         super(EnergyGRU, self).__init__()
-        self.gru = nn.GRU(input_size, hidden_size, num_layers,
-                          dropout=dropout, batch_first=True)
+        self.gru = nn.GRU(input_size, hidden_size,
+                          num_layers=num_layers, dropout=dropout, batch_first=True)
         self.fc_out = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
+        # Forward pass through GRU
         gru_out, _ = self.gru(x)
-        return self.fc_out(gru_out[:, -1, :])
+        if gru_out.dim() == 2:
+            last_output = gru_out
+        else:
+            last_output = gru_out[:, -1, :]
+        output = self.fc_out(last_output)
+        return output
 
 
 def read_data():
@@ -196,35 +225,40 @@ def objective(trial, data_train, data_val, model_type):
     """
     Objective function for hyperparameter tuning with Optuna.
     """
-    # Select model type (static or trial-specific for flexibility)
-    # model_type = trial.suggest_categorical(
-    #     'model_type', ['Transformer', 'LSTM', 'GRU'])
-
     # Shared hyperparameters
-    learning_rate = trial.suggest_float('learning_rate', 1e-4, 1e-2, log=True)
-    batch_size = trial.suggest_categorical('batch_size', 64, 128, 256)
-    epochs = trial.suggest_categorical('epochs', 100, 200, 500)
-
-    print("Trial parameters: ", trial.params)
+    learning_rate = trial.suggest_float('learning_rate', 1e-4, 1e-2)
+    # batch_size = trial.suggest_categorical('batch_size', [64, 128, 256])
+    batch_size = 128
+    epochs = trial.suggest_categorical('epochs', [100, 200, 500])
 
     train, val, train = create_dataset(
         data_train, data_val, data_val, batch_size)
 
     print("Model type: ", model_type)
-    print("Train data: ", train)
-    print("Validation data: ", val)
 
     if model_type == 'Transformer':
-
         # Transformer-specific hyperparameters
-        # d_model multiples of 64
-        d_model = trial.suggest_int('d_model', 64, 512)
-        nhead = trial.suggest_int('nhead', 2, 8)
+        valid_combinations = [
+            (dm, nh) for dm in range(64, 513, 64)
+            for nh in [2, 4, 6, 8] if dm % nh == 0
+        ]
+        valid_combinations_str = [
+            f"{dm},{nh}" for dm, nh in valid_combinations]
+
+        # Suggest from valid combinations (as strings)
+        selected_combination_str = trial.suggest_categorical(
+            'd_model_nhead', valid_combinations_str)
+        # Decode back to integers
+        d_model, nhead = map(int, selected_combination_str.split(','))
+
         num_encoder_layers = trial.suggest_int('num_encoder_layers', 2, 6)
         num_decoder_layers = trial.suggest_int('num_decoder_layers', 2, 6)
         dim_feedforward = trial.suggest_int(
             'dim_feedforward', 128, 512, step=128)
         dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
+
+        print("Hyperparameters: ", d_model, nhead, num_encoder_layers,
+              num_decoder_layers, dim_feedforward, dropout)
 
         model = EnergyTransformer(
             input_size=len(feature_cols),
@@ -274,20 +308,19 @@ def objective(trial, data_train, data_val, model_type):
         for features, targets in train:
             optimizer.zero_grad()
             outputs = model(features)
-            print("Fejler den her?")
             loss = criterion(outputs.squeeze(-1), targets)
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
 
-    # Validation step
-    val_loss = 0
-    model.eval()
-    with torch.no_grad():
-        for features, targets in val:
-            outputs = model(features)
-            loss = criterion(outputs.squeeze(-1), targets)
-            val_loss += loss.item()
+        # Validation step
+        val_loss = 0
+        model.eval()
+        with torch.no_grad():
+            for features, targets in val:
+                outputs = model(features)
+                loss = criterion(outputs.squeeze(-1), targets)
+                val_loss += loss.item()
 
     # Return validation loss
     return val_loss / len(val)
@@ -301,7 +334,7 @@ if __name__ == '__main__':
     df = feature_engineering(df)
 
     # Set model type as a variable
-    model_type = 'Transformer'  # Change to 'LSTM' or 'GRU' as needed
+    model_type = 'LSTM'  # Change to 'LSTM' or 'GRU' as needed
 
     # Set HourDK as the index
     df = df.set_index('HourDK')
@@ -329,9 +362,14 @@ if __name__ == '__main__':
     # Optuna study for hyperparameter tuning
     study = optuna.create_study(direction='minimize')
     study.optimize(lambda trial: objective(
-        trial, data_trainN, data_valN, model_type=model_type), n_trials=50)
+        trial, data_trainN, data_valN, model_type=model_type), n_trials=100)
 
     print("Best hyperparameters: ", study.best_params)
     print("Best value: ", study.best_value)
-    print("Best trial: ", study.best_trial)
-    print("Best trial parameters: ", study.best_trial.params)
+
+    # Save the study
+    study_name = f"{model_type}_study.pkl"
+
+    # Save hyperparameters in csv file
+    study_df = study.trials_dataframe()
+    study_df.to_csv(f"{model_type}_study.csv")

@@ -78,22 +78,59 @@ class EnergyLSTM(nn.Module):
         return output
 
 
+# class EnergyGRU(nn.Module):
+#     def __init__(self, input_size, hidden_size, num_layers, output_size, dropout):
+#         super(EnergyGRU, self).__init__()
+#         self.gru = nn.GRU(input_size, hidden_size,
+#                           num_layers=num_layers, dropout=dropout, batch_first=True)
+#         self.fc_out = nn.Linear(hidden_size, output_size)
+
+#     def forward(self, x):
+#         gru_out, _ = self.gru(x)
+#         if gru_out.dim() == 2:
+#             last_output = gru_out
+#         else:
+#             last_output = gru_out[:, -1, :]
+#         last_output = self.dropout(last_output)  # Apply dropout here
+#         output = self.fc_out(last_output)
+#         return output
+
+
 class EnergyGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.0):
         super(EnergyGRU, self).__init__()
-        self.gru = nn.GRU(input_size, hidden_size,
-                          num_layers=num_layers, dropout=dropout, batch_first=True)
-        self.fc_out = nn.Linear(hidden_size, output_size)
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        
+        # GRU layer
+        self.gru = nn.GRU(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0  # Dropout only applies if num_layers > 1
+        )
+        
+        # Fully connected output layer
+        self.fc = nn.Linear(hidden_size, output_size)
+        
+        # Dropout layer (applied after GRU outputs)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
     def forward(self, x):
-        gru_out, _ = self.gru(x)
-        if gru_out.dim() == 2:
-            last_output = gru_out
-        else:
-            last_output = gru_out[:, -1, :]
-        last_output = self.dropout(last_output)  # Apply dropout here
-        output = self.fc_out(last_output)
-        return output
+        # Initialize hidden state for first input
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
+        
+        # Pass through GRU layer
+        out, _ = self.gru(x, h0)
+        
+        # Apply dropout to the last output
+        last_output = self.dropout(out[:, -1, :])  # Take the last output in the sequence
+        
+        # Pass through fully connected layer
+        out = self.fc(last_output)
+        
+        return out
 
 
 def read_data():

@@ -2,16 +2,19 @@
 
 from datetime import datetime, timedelta
 import math
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import mean_squared_error, root_mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 import optuna  # Hyperparameter optimization
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+import torch.multiprocessing as mp
 
 
 class EnergyTransformer(nn.Module):
@@ -83,12 +86,12 @@ class EnergyGRU(nn.Module):
         self.fc_out = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        # Forward pass through GRU
         gru_out, _ = self.gru(x)
         if gru_out.dim() == 2:
             last_output = gru_out
         else:
             last_output = gru_out[:, -1, :]
+        last_output = self.dropout(last_output)  # Apply dropout here
         output = self.fc_out(last_output)
         return output
 
@@ -97,6 +100,8 @@ def read_data():
     """ Function to read the data """
     df = pd.read_csv(
         '/Users/casper/Documents/GitHub/p9-energy/Dataset/ConsumptionIndustry.csv', sep=';')
+    df2 = pd.read_csv(
+        '/Users/casper/Documents/GitHub/p9-energy/Dataset/ElspotPrices.csv', sep=';')
 
     # Load the dataset for colab
     # df = pd.read_csv('ConsumptionIndustry.csv', sep=';')
@@ -108,11 +113,28 @@ def read_data():
     df['ConsumptionkWh'] = df['ConsumptionkWh'].str.replace(
         ",", ".").astype(float)
 
-    return df
+    # El spot prices
+    df2['HourDK'] = pd.to_datetime(df2['HourDK'])
+    df2['SpotPriceDKK'] = df2['SpotPriceDKK'].str.replace(
+        ",", ".").astype(float)
+    df2.index = df2['HourDK']
+    # remove first row, since the measurement at that time is not present in other dataset
+    df2 = df2.iloc[1:]
+    df2.drop(columns=['HourUTC', 'HourDK', 'PriceArea',
+                      'SpotPriceEUR'], inplace=True)
+
+    # Merge the two datasets
+    dfcombined = pd.merge(df, df2, on='HourDK', how='inner')
+
+    return dfcombined
 
 
 def feature_engineering(df):
     """ Function to create features from the datetime column """
+
+    df.drop(columns=['HourUTC',
+            'MunicipalityNo', 'Branche'], inplace=True)
+
     # df['HourDK'] = pd.to_datetime(df['HourDK'])
 
     # # Lag features
@@ -120,10 +142,21 @@ def feature_engineering(df):
     df['ConsumptionkWh_lag24'] = df['ConsumptionkWh'].shift(24)
     df['ConsumptionkWh_lag168'] = df['ConsumptionkWh'].shift(168)
 
+    # Lag features for SpotPriceDKK
+    df['SpotPriceDKK_lag1'] = df['SpotPriceDKK'].shift(1)
+    df['SpotPriceDKK_lag24'] = df['SpotPriceDKK'].shift(24)
+    df['SpotPriceDKK_lag168'] = df['SpotPriceDKK'].shift(168)
+
     # Rolling Average
     df['ConsumptionkWh_roll24'] = df['ConsumptionkWh'].rolling(
         window=24).mean()
     df['ConsumptionkWh_roll168'] = df['ConsumptionkWh'].rolling(
+        window=168).mean()
+
+    # Rolling Average for SpotPriceDKK
+    df['SpotPriceDKK_roll24'] = df['SpotPriceDKK'].rolling(
+        window=24).mean()
+    df['SpotPriceDKK_roll168'] = df['SpotPriceDKK'].rolling(
         window=168).mean()
 
     # Holidays in Denmark from 2021 to 2024 (source: https://publicholidays.dk/)
@@ -150,6 +183,7 @@ def feature_engineering(df):
 
     # drop Nan values
     df = df.dropna()
+
     return df
 
 
@@ -160,8 +194,21 @@ def sample_data_with_train_window(df, start_date, train_window_size):
     return df[(df.index >= start_date) & (df.index <= end_date)]
 
 
+# def get_next_window(data, train_window_size, validation_window_size, forecast_horizon):
+#     return data[:train_window_size], data[train_window_size:validation_window_size+train_window_size], data[train_window_size+validation_window_size:train_window_size + forecast_horizon + validation_window_size]
+
 def get_next_window(data, train_window_size, validation_window_size, forecast_horizon):
-    return data[:train_window_size], data[train_window_size:validation_window_size+train_window_size], data[train_window_size+validation_window_size:train_window_size + forecast_horizon + validation_window_size]
+    train_window_size = int(train_window_size)
+    validation_window_size = int(validation_window_size)
+    forecast_horizon = int(forecast_horizon)
+
+    train_data = data[:train_window_size]
+    val_data = data[train_window_size:train_window_size +
+                    validation_window_size]
+    test_data = data[train_window_size + validation_window_size:
+                     train_window_size + validation_window_size + forecast_horizon]
+
+    return train_data, val_data, test_data
 
 
 def normalize_dataset(train_df, val_df, test_df):
@@ -217,23 +264,32 @@ def create_dataset(train_df, val_df, test_df, batch_size=128):
 scaler = MinMaxScaler()
 feature_cols = ['ConsumptionkWh_lag1', 'ConsumptionkWh_lag24', 'ConsumptionkWh_lag168',
                 'ConsumptionkWh_roll24', 'ConsumptionkWh_roll168', 'hour_sin', 'hour_cos',
-                'day_sin', 'day_cos', 'month_sin', 'month_cos']
+                'day_sin', 'day_cos', 'month_sin', 'month_cos', 'SpotPriceDKK',
+                'SpotPriceDKK_lag1', 'SpotPriceDKK_lag24', 'SpotPriceDKK_lag168',
+                'SpotPriceDKK_roll24', 'SpotPriceDKK_roll168']
 target_col = 'ConsumptionkWh'
 
 
-def objective(trial, data_train, data_val, model_type):
+def objective(trial, data_train, data_val, data_test, model_type):
     """
     Objective function for hyperparameter tuning with Optuna.
     """
+    # Use GPU or MPS if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available():
+        print("CUDA is USED")
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+        print("Using MPS device")
+    else:
+        print("Using CPU device")
+
     # Shared hyperparameters
     learning_rate = trial.suggest_float('learning_rate', 1e-4, 1e-2)
-    # batch_size = trial.suggest_categorical('batch_size', [64, 128, 256])
     batch_size = 128
     epochs = trial.suggest_categorical('epochs', [100, 200, 500])
-
-    train, val, train = create_dataset(
-        data_train, data_val, data_val, batch_size)
-
+    train, val, test = create_dataset(
+        data_train, data_val, data_test, batch_size)
     print("Model type: ", model_type)
 
     if model_type == 'Transformer':
@@ -244,22 +300,18 @@ def objective(trial, data_train, data_val, model_type):
         ]
         valid_combinations_str = [
             f"{dm},{nh}" for dm, nh in valid_combinations]
-
         # Suggest from valid combinations (as strings)
         selected_combination_str = trial.suggest_categorical(
             'd_model_nhead', valid_combinations_str)
         # Decode back to integers
         d_model, nhead = map(int, selected_combination_str.split(','))
-
         num_encoder_layers = trial.suggest_int('num_encoder_layers', 2, 6)
         num_decoder_layers = trial.suggest_int('num_decoder_layers', 2, 6)
         dim_feedforward = trial.suggest_int(
             'dim_feedforward', 128, 512, step=128)
         dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-
         print("Hyperparameters: ", d_model, nhead, num_encoder_layers,
               num_decoder_layers, dim_feedforward, dropout)
-
         model = EnergyTransformer(
             input_size=len(feature_cols),
             d_model=d_model,
@@ -275,7 +327,6 @@ def objective(trial, data_train, data_val, model_type):
         hidden_size = trial.suggest_categorical('hidden_size', [64, 128, 256])
         num_layers = trial.suggest_int('num_layers', 1, 4)
         dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-
         model = EnergyLSTM(
             input_size=len(feature_cols),
             hidden_size=hidden_size,
@@ -288,7 +339,6 @@ def objective(trial, data_train, data_val, model_type):
         hidden_size = trial.suggest_categorical('hidden_size', [64, 128, 256])
         num_layers = trial.suggest_int('num_layers', 1, 4)
         dropout = trial.suggest_float('dropout', 0.1, 0.5, step=0.1)
-
         model = EnergyGRU(
             input_size=len(feature_cols),
             hidden_size=hidden_size,
@@ -297,6 +347,7 @@ def objective(trial, data_train, data_val, model_type):
             dropout=dropout
         )
 
+    model.to(device)
     # Define loss and optimizer
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -306,6 +357,7 @@ def objective(trial, data_train, data_val, model_type):
     train_loss = 0
     for epoch in range(epochs):  # Dynamic epoch count
         for features, targets in train:
+            features, targets = features.to(device), targets.to(device)
             optimizer.zero_grad()
             outputs = model(features)
             loss = criterion(outputs.squeeze(-1), targets)
@@ -318,19 +370,34 @@ def objective(trial, data_train, data_val, model_type):
         model.eval()
         with torch.no_grad():
             for features, targets in val:
+                features, targets = features.to(device), targets.to(device)
                 outputs = model(features)
                 loss = criterion(outputs.squeeze(-1), targets)
                 val_loss += loss.item()
 
     # Return validation loss
-    return val_loss / len(val)
+    # return val_loss / len(val)
+    # Test the model
+    model.eval()
+    predictions = []
+    with torch.no_grad():
+        for features, targets in test:
+            features, targets = features.to(device), targets.to(device)
+            outputs = model(features)
+            predictions.extend(outputs.squeeze(-1).cpu().numpy())
+
+    # Calculate RMSE
+    rmse = np.sqrt(mean_squared_error(data_test[target_col], predictions))
+    print(f"RMSE: {rmse}")
+    return rmse
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')  # Required for parallelism in macOS
     # Read the data
     df = read_data()
 
-    # Feature Engineering
+    # # Feature Engineering
     df = feature_engineering(df)
 
     # Set model type as a variable
@@ -340,10 +407,21 @@ if __name__ == '__main__':
     df = df.set_index('HourDK')
 
     # Data splitting
-    date_start = '2023-11-01'
-    window_train_size = 24*7*2  # 2 weeks in hours
-    window_val_size = 24*7      # 1 week in hours
-    forecast_horizon = 24       # 1 day in hours
+    # date_start = '2023-11-01'
+    # window_train_size = 24*7*2  # 2 weeks in hours
+    # window_val_size = 24*7      # 1 week in hours
+    # forecast_horizon = 24       # 1 day in hours
+
+    date_start = '2021-01-01'
+
+    # Training window size = 2 years in hours
+    window_train_size = 365 * 24 * 2  # 2 years = 17,520 hours
+
+    # Validation window size = 1 year in hours
+    window_val_size = 365 * 24  # 1 year = 8,760 hours
+
+    # Forecast horizon (testing period) = 1 year in hours
+    forecast_horizon = 365 * 24  # 1 year = 8,760 hours
 
     # Sample data
     data = sample_data_with_train_window(df, date_start, window_train_size)
@@ -362,14 +440,60 @@ if __name__ == '__main__':
     # Optuna study for hyperparameter tuning
     study = optuna.create_study(direction='minimize')
     study.optimize(lambda trial: objective(
-        trial, data_trainN, data_valN, model_type=model_type), n_trials=100)
+        trial, data_trainN, data_valN, data_testN, model_type=model_type), n_trials=100, n_jobs=5)
 
-    print("Best hyperparameters: ", study.best_params)
-    print("Best value: ", study.best_value)
+    # print("Best hyperparameters: ", study.best_params)
+    # print("Best value: ", study.best_value)
+    # print("Total time for optimization: ",
+    #       study.best_trial.duration.resolution)
+
+    # # Save the study
+    # study_name = f"{model_type}_study.pkl"
+
+    # warnings.filterwarnings("default")
+
+    # # Save hyperparameters in csv file
+    # trial = study.best_trial
+    # print(f"Accuracy: {trial.value}")
+    # print(f"best params for {model_type}: {trial.params}")
+
+    # # Save the results in CSV
+    # df_tuning = pd.DataFrame(columns=['model', 'accuracy', 'params', 'time'])
+    # new_row = {'model': model_type, 'accuracy': trial.value,
+    #            'params': str(trial.params), 'time': study.best_trial.duration}
+    # df_tuning = pd.concat(
+    #     [df_tuning, pd.DataFrame([new_row])], ignore_index=True)
+    # df_tuning = df_tuning.sort_values(
+    #     by=['model', 'accuracy', 'params'], ascending=True).reset_index(drop=True)
+    # df_tuning.to_csv('whitebox_tuning.csv', index=False)
+
+    # Display results
+    best_trial = study.best_trial
+    print("Best hyperparameters: ", best_trial.params)
+    print("Best value: ", best_trial.value)
+    print("Total time for optimization: ", best_trial.duration)
 
     # Save the study
     study_name = f"{model_type}_study.pkl"
 
-    # Save hyperparameters in csv file
-    study_df = study.trials_dataframe()
-    study_df.to_csv(f"{model_type}_study.csv")
+    # Save hyperparameters in CSV file
+    df_tuning = pd.DataFrame(columns=['model', 'accuracy', 'params', 'time'])
+    new_row = {
+        'model': model_type,
+        'accuracy': best_trial.value,
+        'params': str(best_trial.params),
+        'time': best_trial.duration
+    }
+
+    # Fix the FutureWarning by removing empty columns if any
+    df_tuning = pd.concat(
+        [df_tuning.dropna(how='all'), pd.DataFrame([new_row])], ignore_index=True
+    )
+
+    df_tuning = df_tuning.sort_values(
+        by=['model', 'accuracy', 'params'], ascending=True
+    ).reset_index(drop=True)
+    df_tuning.to_csv('whitebox_tuningLong.csv', index=False)
+
+    print(f"Accuracy: {best_trial.value}")
+    print(f"Best params for {model_type}: {best_trial.params}")

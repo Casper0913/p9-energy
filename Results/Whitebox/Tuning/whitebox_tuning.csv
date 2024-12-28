@@ -1,7 +1,7 @@
 model,accuracy,params
-SARIMAX_1440_336_minmax,4919.535579964616,"{'order': (0, 0, 0), 'seasonal_order': (1, 1, 0, 12), 'trend': None}"
-SARIMAX_17520_8760_minmax,9499.81597429464,"{'order': (1, 0, 2), 'seasonal_order': (2, 1, 2, 12), 'trend': None}"
-SARIMAX_336_24_minmax,1010.8287895865616,"{'order': (0, 1, 0), 'seasonal_order': (2, 1, 2, 12), 'trend': None}"
-SARIMA_1440_336_minmax,3918.393769614099,"{'order': (0, 0, 1), 'seasonal_order': (2, 0, 2, 12)}"
-SARIMA_17520_8760_minmax,6441.655963073856,"{'order': (0, 0, 0), 'seasonal_order': (1, 1, 2, 12)}"
-SARIMA_336_24_minmax,1149.6709222068855,"{'order': (2, 1, 2), 'seasonal_order': (2, 2, 2, 12)}"
+SARIMAX_1440_336,4919.535579964616,"{'order': (0, 0, 0), 'seasonal_order': (1, 1, 0, 12)}"
+SARIMAX_17520_8760,9499.81597429464,"{'order': (1, 0, 2), 'seasonal_order': (2, 1, 2, 12)}"
+SARIMAX_336_24,1010.8287895865616,"{'order': (0, 1, 0), 'seasonal_order': (2, 1, 2, 12)}"
+SARIMA_1440_336,3918.393769614099,"{'order': (0, 0, 1), 'seasonal_order': (2, 0, 2, 12)}"
+SARIMA_17520_8760,6441.655963073856,"{'order': (0, 0, 0), 'seasonal_order': (1, 1, 2, 12)}"
+SARIMA_336_24,1149.6709222068855,"{'order': (2, 1, 2), 'seasonal_order': (2, 2, 2, 12)}"

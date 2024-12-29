@@ -8,4 +8,4 @@
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=25G
 
-singularity exec container.sif python3 Whitebox_tuning.py
+singularity exec energycontainer.sif python3 Whitebox_run.py

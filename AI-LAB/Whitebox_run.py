@@ -131,5 +131,5 @@ if __name__ == '__main__':
     df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
 
     save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
-                              stats_path=f'../Results/Whitebox/whitebox_run_stats.csv', 
-                              prediction_path=f'../Results/Whitebox/Forecasting/{model_name}_{config_name}.csv')
+                              prediction_path=f'{model_name}_{config_name}.csv',
+                              stats_path=f'whitebox_run_stats.csv')

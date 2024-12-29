@@ -72,18 +72,18 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
   df_stats.to_csv(stats_path, index=False)
 
 if __name__ == '__main__':
-  model_name = 'SARIMAX'
+  model_name = 'SARIMA'
   date_start = '2023-11-01'
   date_end = '2024-11-01'
 
   # List of (window_train_size, forecast_horizon, model_config) tuples
-  configurations = [
-    (336, 24, {'order': (0, 1, 0), 'seasonal_order': (2, 1, 2, 12)}),
-    (1440, 336, {'order': (0, 0, 0), 'seasonal_order': (1, 1, 0, 12)}),
-    (17520, 8760, {'order': (1, 0, 2), 'seasonal_order': (2, 1, 2, 12)})
+  scenarios = [
+    (336, 24, {'order': (2, 1, 2), 'seasonal_order': (2, 2, 2, 12)}),
+    (1440, 336, {'order': (0, 0, 1), 'seasonal_order': (2, 0, 2, 12)}),
+    (17520, 8760, {'order': (0, 0, 0), 'seasonal_order': (1, 1, 2, 12)})
   ]
 
-  for window_train_size, forecast_horizon, model_config in configurations:
+  for window_train_size, forecast_horizon, model_config in scenarios:
     config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
 
     warnings.filterwarnings("ignore")
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     scaler = MinMaxScaler()
 
     data = sample_data_with_train_window(df, date_start, date_end, window_train_size)
-    exog_data = sample_data_with_train_window(df2, date_start, date_end, window_train_size)
+    # exog_data = sample_data_with_train_window(df2, date_start, date_end, window_train_size)
     results = np.array([])
     iterations = 0
     max_iterations = math.ceil(8760 / forecast_horizon)
@@ -105,13 +105,13 @@ if __name__ == '__main__':
         forecast_horizon = 8760 - len(results)
       
       data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-      exog_data_train, exog_data_test = get_next_window(exog_data, window_train_size, forecast_horizon)
+      # exog_data_train, exog_data_test = get_next_window(exog_data, window_train_size, forecast_horizon)
 
       data_train_scaled = scaler.fit_transform(data_train[['ConsumptionkWh']])
       data_train = pd.DataFrame(data_train_scaled, columns=['ConsumptionkWh'], index=data_train.index)
-      model = SARIMAX(data_train, order=model_config['order'], seasonal_order=model_config['seasonal_order'], exog=exog_data_train)
+      model = SARIMAX(data_train, order=model_config['order'], seasonal_order=model_config['seasonal_order'])
       try:
-        predictions_scaled = forecast_whitebox_model(model, forecast_horizon, model_name, exog_data_test)
+        predictions_scaled = forecast_whitebox_model(model, forecast_horizon, model_name)
         predictions = scaler.inverse_transform(predictions_scaled.values.reshape(-1, 1))
         predictions = pd.Series(predictions.flatten(), index=data_test.index)
       except Exception as e:
@@ -120,7 +120,7 @@ if __name__ == '__main__':
       results = np.append(results, predictions.values)
 
       data = data.iloc[forecast_horizon:]
-      exog_data = exog_data.iloc[forecast_horizon:]
+      # exog_data = exog_data.iloc[forecast_horizon:]
 
     end_time = time.time()
 
@@ -131,5 +131,5 @@ if __name__ == '__main__':
     df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
 
     save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
-                              prediction_path=f'{model_name}_{config_name}.csv',
+                              prediction_path=f'{config_name}.csv',
                               stats_path=f'whitebox_run_stats.csv')

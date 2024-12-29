@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=p9-energytransformer_testing
+#SBATCH --job-name=p9_whitebox_run
 #SBATCH --output=result_%j.out
 #SBATCH --error=error_%j.err
 #SBATCH --time=03:00:00 # 

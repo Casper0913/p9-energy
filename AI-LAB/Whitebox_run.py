@@ -72,15 +72,15 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
   df_stats.to_csv(stats_path, index=False)
 
 if __name__ == '__main__':
-  model_name = 'DynamicFactor'
+  model_name = 'ThetaModel'
   date_start = '2023-11-01'
   date_end = '2024-11-01'
 
   # List of (window_train_size, forecast_horizon, model_config) tuples
   scenarios = [
-    (336, 24, {}),
-    (1440, 336, {}),
-    (17520, 8760, {})
+    (336, 24, {'deseasonalize': False, 'use_test': False, 'method': 'additive', 'difference': True}),
+    (1440, 336, {'deseasonalize': False, 'use_test': True, 'method': 'multiplicative', 'difference': False}),
+    (17520, 8760, {'deseasonalize': False, 'use_test': False, 'method': 'additive', 'difference': True})
   ]
 
   for window_train_size, forecast_horizon, model_config in scenarios:
@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
       data_train_scaled = scaler.fit_transform(data_train[['ConsumptionkWh']])
       data_train = pd.DataFrame(data_train_scaled, columns=['ConsumptionkWh'], index=data_train.index)
-      model = DynamicFactorMQ(data_train)
+      model = ThetaModel(data_train, deseasonalize=model_config['deseasonalize'], use_test=model_config['use_test'], method=model_config['method'], difference=model_config['difference'])
       try:
         predictions_scaled = forecast_whitebox_model(model, forecast_horizon, model_name)
         predictions = scaler.inverse_transform(predictions_scaled.values.reshape(-1, 1))

@@ -8,6 +8,6 @@
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=25G
 
-singularity exec energycontainer.sif sbatch energycontainer.def
+singularity build --fakeroot energycontainer.sif energycontainer.def
 
  

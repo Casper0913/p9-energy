@@ -21,10 +21,8 @@ import os
 os.environ['NIXTLA_ID_AS_COL'] = '1'
 
 def loaddataset():
-    # consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
-    # spot_prices = pd.read_csv('/content/ELSpotPrices.csv', sep=';')
-    consumption = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
-    spot_prices = pd.read_csv('../Dataset/ELSpotPrices.csv', sep=';')
+    consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
+    spot_prices = pd.read_csv('ELSpotPrices.csv', sep=';')
 
     # Convert comma decimal format to float
     consumption['ConsumptionkWh'] = consumption['ConsumptionkWh'].str.replace(
@@ -114,7 +112,6 @@ def objective_Informer(trial, data_train, data_test, forecast_horizon):
     nf.fit(data_train)
     predictions = nf.predict(data_test)
     return root_mean_squared_error(data_test['y'], predictions['Informer'])
-
 
 if __name__ == '__main__':
   date_start = '2023-11-01'

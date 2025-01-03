@@ -96,22 +96,22 @@ def objective_LSTM(trial, data_train, data_test, forecast_horizon):
     predictions = nf.predict(data_test)
     return root_mean_squared_error(data_test['y'], predictions['LSTM'])
 
-def objective_Informer(trial, data_train, data_test, forecast_horizon):
+def objective_NHITS(trial, data_train, data_test, forecast_horizon):
     nf = NeuralForecast(
-        models=[Informer(
-                    h=forecast_horizon, input_size=24, loss=RMSE(),
-                    hidden_size=trial.suggest_categorical('hidden_size', [8, 16, 32, 64, 128, 256]),
-                    conv_hidden_size=trial.suggest_categorical('conv_hidden_size', [8, 16, 32, 64, 128, 256]),
-                    n_head=trial.suggest_categorical('n_head', [1, 2, 4, 8]),
-                    scaler_type=trial.suggest_categorical('scaler_type', ['standard', 'minmax', 'robust']),
-                    max_steps=5
+        models=[NHITS(h=forecast_horizon, loss=RMSE(),
+                    input_size=trial.suggest_categorical('input_size', [1, 2, 6, 12, 24, 48]),
+                    max_steps=trial.suggest_categorical('max_steps', [200, 500, 1000, 3000]),
+                    val_check_steps=trial.suggest_categorical('val_check_steps', [10, 20, 50, 100, 250, 500]),
+                    batch_size=trial.suggest_categorical('batch_size', [16, 32, 64, 128]),
+                    step_size=trial.suggest_categorical('step_size', [1, 2, 3, 4, 5]),
+                    scaler_type=trial.suggest_categorical('scaler_type', ['standard', 'minmax', 'robust', 'identity']),
                     )
         ],
         freq='H'
     )
     nf.fit(data_train)
     predictions = nf.predict(data_test)
-    return root_mean_squared_error(data_test['y'], predictions['Informer'])
+    return root_mean_squared_error(data_test['y'], predictions['NHITS'])
 
 if __name__ == '__main__':
   date_start = '2023-11-01'

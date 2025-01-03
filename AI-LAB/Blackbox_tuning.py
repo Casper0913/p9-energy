@@ -116,8 +116,8 @@ def objective_Informer(trial, data_train, data_test, forecast_horizon):
 if __name__ == '__main__':
   date_start = '2023-11-01'
   date_end = '2024-11-01'
-  window_train_size = 1440 #hours
-  forecast_horizon = 336 #hours
+  window_train_size = 17520 #hours
+  forecast_horizon = 8760 #hours
   # 336_24, 1440_336, 17520_8760
   trials = 100
   model_name = f'LSTM_{window_train_size}_{forecast_horizon}'

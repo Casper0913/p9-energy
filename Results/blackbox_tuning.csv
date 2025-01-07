@@ -1,5 +1,7 @@
 model,accuracy,params
+DLinear_1440_336,4475.627108273929,"{'input_size': 48, 'moving_avg_window': 37, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'scaler_type': 'standard'}"
+DLinear_336_24,2505.655896757381,"{'input_size': 24, 'moving_avg_window': 33, 'max_steps': 3000, 'val_check_steps': 500, 'batch_size': 32, 'scaler_type': 'standard'}"
+LSTM_1440_336,4304.072802752126,"{'encoder_n_layers': 2, 'encoder_hidden_size': 200, 'context_size': 5, 'decoder_hidden_size': 200, 'decoder_layers': 1, 'max_steps': 500, 'val_check_steps': 100, 'batch_size': 64, 'scaler_type': 'minmax'}"
 LSTM_336_24,2329.25777905166,"{'encoder_n_layers': 5, 'encoder_hidden_size': 100, 'context_size': 20, 'decoder_hidden_size': 100, 'decoder_layers': 2, 'max_steps': 500, 'val_check_steps': 50, 'batch_size': 64, 'scaler_type': 'standard'}"
 NHITS_1440_336,3659.969095623027,"{'input_size': 24, 'max_steps': 200, 'val_check_steps': 500, 'batch_size': 128, 'step_size': 1, 'scaler_type': 'minmax'}"
 NHITS_336_24,2255.9055118501083,"{'input_size': 24, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'step_size': 5, 'scaler_type': 'robust'}"
-LSTM_1440_336,4304.072802752126,"{'encoder_n_layers': 2, 'encoder_hidden_size': 200, 'context_size': 5, 'decoder_hidden_size': 200, 'decoder_layers': 1, 'max_steps': 500, 'val_check_steps': 100, 'batch_size': 64, 'scaler_type': 'minmax'}"

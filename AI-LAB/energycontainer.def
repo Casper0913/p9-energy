@@ -6,17 +6,18 @@ From: nvcr.io/nvidia/pytorch:24.11-py3
   Project="P9 Energy Container"
 
 %post 
-  # This section is where you install additional packages or software
-  # Update package list and install the latest Python and pip version
-  echo "Installing P9 Energy dependencies"
-  
- 
+  echo "Setting up the environment and installing P9 Energy dependencies"
+
+  # Update pip
   python3 -m pip install --upgrade pip
-  python3 -m pip install pandas numpy scikit-learn statsmodels matplotlib seaborn prophet optuna neuralforecast pytorch_forecasting
+
+  # Install dependencies with no cache to reduce temporary space usage
+  python3 -m pip install --no-cache-dir pandas numpy scikit-learn optuna neuralforecast
+  
   echo "P9 Energy dependencies installed"
 
 %test 
   echo "Testing P9 Energy Container"
   python3 --version
-  pip3 --version
+  python3 -m pip --version
   echo "P9 Energy Container is ready to use"

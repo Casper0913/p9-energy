@@ -198,7 +198,7 @@ if __name__ == '__main__':
     window_train_size = 17520  # hours
     forecast_horizon = 8760  # hours
     # 336_24, 1440_336, 17520_8760
-    trials = 100
+    trials = 20
     model_name = f'LSTM_{window_train_size}_{forecast_horizon}'
 
     combined_data = loaddataset()

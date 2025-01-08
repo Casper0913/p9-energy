@@ -8,4 +8,4 @@
 #SBATCH --cpus-per-task=20
 #SBATCH --mem=175G
 
-singularity exec --nv energycontainerblackbox.sif python3 Blackbox_tuning.py
+singularity exec --nv energycontainerblackbox.sif python3 Blackbox_tuning2.py

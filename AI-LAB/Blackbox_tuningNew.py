@@ -20,8 +20,8 @@ os.environ['NIXTLA_ID_AS_COL'] = '1'
 def loaddataset():
     # consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
     # spot_prices = pd.read_csv('/content/ELSpotPrices.csv', sep=';')
-    consumption = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
-    spot_prices = pd.read_csv('../Dataset/ELSpotPrices.csv', sep=';')
+    consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
+    spot_prices = pd.read_csv('ELSpotPrices.csv', sep=';')
 
     # Convert comma decimal format to float
     consumption['ConsumptionkWh'] = consumption['ConsumptionkWh'].str.replace(

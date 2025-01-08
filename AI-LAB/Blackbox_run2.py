@@ -20,6 +20,11 @@ warnings.filterwarnings('once')
 
 os.environ['NIXTLA_ID_AS_COL'] = '1'
 
+df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
+df['HourDK'] = pd.to_datetime(df['HourDK'])
+df['ConsumptionkWh'] = df['ConsumptionkWh'].str.replace(",", ".").astype(float)
+df.index = df['HourDK']
+df.drop(columns=['HourUTC', 'HourDK', 'MunicipalityNo', 'Branche'], inplace=True)
 
 def loaddataset():
     consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
@@ -68,8 +73,6 @@ def prepare_neuralforecast_data(combined_data):
 
 
 def sample_data(df, start_date, end_date):
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df.index = pd.to_datetime(df['ds'])
     end_date = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(hours=25)
     return df[(df.index >= start_date) & (df.index <= end_date)]
 
@@ -89,11 +92,10 @@ def get_next_window(data, train_window_size, forecast_horizon):
     return data[:train_window_size], data[train_window_size:train_window_size + forecast_horizon]
 
 
-def forecast_blackbox_model(model):
+def forecast_blackbox_model(model, model_name):
     nf = NeuralForecast(models=[model], freq='H')
     nf.fit(data_train)
-    return nf.predict(data_test)
-
+    return nf.predict(data_test)[model_name]
 
 def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, prediction_path, stats_path):
     df_predictions.to_csv(prediction_path, header=False)
@@ -101,8 +103,7 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
     try:
         df_stats = pd.read_csv(stats_path)
     except:
-        df_stats = pd.DataFrame(
-            columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
+        df_stats = pd.DataFrame(columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
 
     new_row = {'model': config_name, 'runtime': runtime,
                'mse': mean_squared_error(df_predictions, df_true),
@@ -156,7 +157,7 @@ if __name__ == '__main__':
                           val_check_steps=model_config['val_check_steps'], batch_size=model_config['batch_size'], step_size=model_config['step_size'], 
                           scaler_type=model_config['scaler_type'])
             try:
-                predictions = forecast_blackbox_model(model)
+                predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:
                 raise RuntimeError(f'Model failed to fit and forecast at iteration {iterations}')
 
@@ -167,7 +168,7 @@ if __name__ == '__main__':
 
         warnings.filterwarnings("default")
 
-        df_true = sample_data(neuralforecast_data, date_start, date_end)
+        df_true = sample_data(df, date_start, date_end)
         df_predictions = pd.DataFrame(results)
         df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
 

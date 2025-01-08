@@ -7,5 +7,4 @@ LSTM_336_24,2329.25777905166,"{'encoder_n_layers': 5, 'encoder_hidden_size': 100
 NHITS_1440_336,3659.969095623027,"{'input_size': 24, 'max_steps': 200, 'val_check_steps': 500, 'batch_size': 128, 'step_size': 1, 'scaler_type': 'minmax'}"
 NHITS_17520_8760,6831.659376644848,"{'input_size': 24, 'max_steps': 200, 'val_check_steps': 10, 'batch_size': 128, 'step_size': 5, 'scaler_type': 'robust'}"
 NHITS_336_24,2255.9055118501083,"{'input_size': 24, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'step_size': 5, 'scaler_type': 'robust'}"
-Informer_1440_336,4324.034518397538,"{'input_size': 12, 'hidden_size': 384, 'n_head': 8, 'conv_hidden_size': 256, 'encoder_layers': 3, 'decoder_layers': 1, 'max_steps': 1000, 'val_check_steps': 20, 'batch_size': 16, 'scaler_type': 'robust'}"
 Informer_336_24,2628.8577186863563,"{'input_size': 12, 'hidden_size': 384, 'n_head': 8, 'conv_hidden_size': 256, 'encoder_layers': 3, 'decoder_layers': 4, 'max_steps': 3000, 'val_check_steps': 250, 'batch_size': 16, 'scaler_type': 'minmax'}"

@@ -151,7 +151,7 @@ if __name__ == '__main__':
                 forecast_horizon = 8760 - len(results)
 
             data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-            model = DLinear(input_size=model_config['input_size'], moving_avg_window=model_config['moving_avg_window'], 
+            model = DLinear(h=forecast_horizon, input_size=model_config['input_size'], moving_avg_window=model_config['moving_avg_window'], 
                             max_steps=model_config['max_steps'], val_check_steps=model_config['val_check_steps'], 
                             batch_size=model_config['batch_size'], scaler_type=model_config['scaler_type'])
             try:

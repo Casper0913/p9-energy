@@ -1,2 +1,0 @@
-model,accuracy,params,time
-LSTM,0.21939319644191738,"{'learning_rate': 0.009224514920766601, 'epochs': 200, 'hidden_size': 256, 'num_layers': 3, 'dropout': 0.1}",0 days 00:00:12.505052

@@ -118,15 +118,15 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
 
 if __name__ == '__main__':
-    model_name = 'DLinear'
+    model_name = 'NHITS'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {'input_size': 24, 'moving_avg_window': 33, 'max_steps': 3000, 'val_check_steps': 500, 'batch_size': 32, 'scaler_type': 'standard'}),
-        (1440, 336, {'input_size': 48, 'moving_avg_window': 37, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'scaler_type': 'standard'}),
-        (17520, 8760, {'input_size': 12, 'moving_avg_window': 21, 'max_steps': 1000, 'val_check_steps': 500, 'batch_size': 64, 'scaler_type': 'robust'})
+        (336, 24, {'input_size': 24, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'step_size': 5, 'scaler_type': 'robust'}),
+        (1440, 336, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 500, 'batch_size': 128, 'step_size': 1, 'scaler_type': 'minmax'}),
+        (17520, 8760, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 10, 'batch_size': 128, 'step_size': 5, 'scaler_type': 'robust'})
     ]
 
     combined_data = loaddataset()
@@ -150,10 +150,11 @@ if __name__ == '__main__':
             if (len(results) + forecast_horizon) > 8760:
                 forecast_horizon = 8760 - len(results)
 
-            data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-            model = DLinear(input_size=model_config['input_size'], moving_avg_window=model_config['moving_avg_window'], 
-                            max_steps=model_config['max_steps'], val_check_steps=model_config['val_check_steps'], 
-                            batch_size=model_config['batch_size'], scaler_type=model_config['scaler_type'])
+            data_train, data_test = get_next_window(
+                data, window_train_size, forecast_horizon)
+            model = NHITS(h=forecast_horizon, loss=RMSE(), input_size=model_config['input_size'], max_steps=model_config['max_steps'], 
+                          val_check_steps=model_config['val_check_steps'], batch_size=model_config['batch_size'], step_size=model_config['step_size'], 
+                          scaler_type=model_config['scaler_type'])
             try:
                 predictions = forecast_blackbox_model(model, forecast_horizon)
             except Exception as e:
@@ -168,8 +169,7 @@ if __name__ == '__main__':
 
         df_true = sample_data(neuralforecast_data, date_start, date_end)
         df_predictions = pd.DataFrame(results)
-        df_predictions.index = pd.date_range(
-            start=date_start, periods=len(results), freq='h')
+        df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
 
         save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
                                   prediction_path=f'{config_name}.csv',

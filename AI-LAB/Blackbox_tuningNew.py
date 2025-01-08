@@ -197,8 +197,8 @@ def objective_NHITS(trial, data_train, data_test, forecast_horizon):
 
 date_start = '2023-11-01'
 date_end = '2024-11-01'
-window_train_size = 336  # hours
-forecast_horizon = 24  # hours
+window_train_size = 1440  # hours
+forecast_horizon = 336  # hours
 # 336_24, 1440_336, 17520_8760
 trials = 20
 model_name = f'Informer_{window_train_size}_{forecast_horizon}'

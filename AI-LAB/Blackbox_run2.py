@@ -156,7 +156,7 @@ if __name__ == '__main__':
                           val_check_steps=model_config['val_check_steps'], batch_size=model_config['batch_size'], step_size=model_config['step_size'], 
                           scaler_type=model_config['scaler_type'])
             try:
-                predictions = forecast_blackbox_model(model, forecast_horizon)
+                predictions = forecast_blackbox_model(model)
             except Exception as e:
                 raise RuntimeError(f'Model failed to fit and forecast at iteration {iterations}')
 

@@ -126,9 +126,9 @@ if __name__ == '__main__':
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {'input_size': 24, 'moving_avg_window': 33, 'max_steps': 3000, 'val_check_steps': 500, 'batch_size': 32, 'scaler_type': 'standard'}),
-        (1440, 336, {'input_size': 48, 'moving_avg_window': 37, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'scaler_type': 'standard'}),
-        (17520, 8760, {'input_size': 12, 'moving_avg_window': 21, 'max_steps': 1000, 'val_check_steps': 500, 'batch_size': 64, 'scaler_type': 'robust'})
+        (336, 24, {}),
+        (1440, 336, {}),
+        (17520, 8760, {})
     ]
 
     combined_data = loaddataset()
@@ -153,9 +153,7 @@ if __name__ == '__main__':
                 forecast_horizon = 8760 - len(results)
 
             data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-            model = DLinear(h=forecast_horizon, input_size=model_config['input_size'], moving_avg_window=model_config['moving_avg_window'], 
-                            max_steps=model_config['max_steps'], val_check_steps=model_config['val_check_steps'], 
-                            batch_size=model_config['batch_size'], scaler_type=model_config['scaler_type'])
+            model = DLinear(h=forecast_horizon)
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:

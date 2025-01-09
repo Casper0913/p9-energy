@@ -19,6 +19,7 @@ import warnings
 warnings.filterwarnings('once')
 
 os.environ['NIXTLA_ID_AS_COL'] = '1'
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 
 def loaddataset():
@@ -199,7 +200,7 @@ if __name__ == '__main__':
     forecast_horizon = 8760  # hours
     # 336_24, 1440_336, 17520_8760
     trials = 20
-    model_name = f'NHITS_{window_train_size}_{forecast_horizon}'
+    model_name = f'LSTM_{window_train_size}_{forecast_horizon}'
 
     combined_data = loaddataset()
     neuralforecast_data = prepare_neuralforecast_data(combined_data)
@@ -210,7 +211,7 @@ if __name__ == '__main__':
 
     def safe_objective(trial):
         try:
-            return objective_NHITS(trial, data_train, data_test, forecast_horizon)
+            return objective_LSTM(trial, data_train, data_test, forecast_horizon)
         except Exception as e:
             print(f"Failed trial: {e}. Skipped this trial.")
             return float('inf')

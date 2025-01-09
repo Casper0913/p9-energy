@@ -125,9 +125,9 @@ if __name__ == '__main__':
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {'input_size': 24, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'step_size': 5, 'scaler_type': 'robust'}),
-        (1440, 336, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 500, 'batch_size': 128, 'step_size': 1, 'scaler_type': 'minmax'}),
-        (17520, 8760, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 10, 'batch_size': 128, 'step_size': 5, 'scaler_type': 'robust'})
+        (336, 24, {}),
+        (1440, 336, {}),
+        (17520, 8760, {})
     ]
 
     combined_data = loaddataset()

@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = Informer(h=forecast_horizon,
+            model = Informer(h=forecast_horizon, loss=RMSE(),
                              input_size=model_config['input_size'], hidden_size=model_config['hidden_size'],
                              n_head=model_config['n_head'], conv_hidden_size=model_config['conv_hidden_size'],
                              encoder_layers=model_config['encoder_layers'], decoder_layers=model_config['decoder_layers'],

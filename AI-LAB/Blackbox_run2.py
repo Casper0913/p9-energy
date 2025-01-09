@@ -24,7 +24,9 @@ df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
 df['HourDK'] = pd.to_datetime(df['HourDK'])
 df['ConsumptionkWh'] = df['ConsumptionkWh'].str.replace(",", ".").astype(float)
 df.index = df['HourDK']
-df.drop(columns=['HourUTC', 'HourDK', 'MunicipalityNo', 'Branche'], inplace=True)
+df.drop(columns=['HourUTC', 'HourDK',
+        'MunicipalityNo', 'Branche'], inplace=True)
+
 
 def loaddataset():
     consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
@@ -97,13 +99,15 @@ def forecast_blackbox_model(model, model_name):
     nf.fit(data_train)
     return nf.predict(data_test)[model_name]
 
+
 def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, prediction_path, stats_path):
     df_predictions.to_csv(prediction_path, header=False)
 
     try:
         df_stats = pd.read_csv(stats_path)
     except:
-        df_stats = pd.DataFrame(columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
+        df_stats = pd.DataFrame(
+            columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
 
     new_row = {'model': config_name, 'runtime': runtime,
                'mse': mean_squared_error(df_predictions, df_true),
@@ -119,15 +123,17 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
 
 if __name__ == '__main__':
-    model_name = 'NHITS'
+    model_name = 'LSTM'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {'input_size': 24, 'max_steps': 3000, 'val_check_steps': 100, 'batch_size': 32, 'step_size': 5, 'scaler_type': 'robust'}),
-        (1440, 336, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 500, 'batch_size': 128, 'step_size': 1, 'scaler_type': 'minmax'}),
-        (17520, 8760, {'input_size': 24, 'max_steps': 200, 'val_check_steps': 10, 'batch_size': 128, 'step_size': 5, 'scaler_type': 'robust'})
+        (336, 24, {'encoder_n_layers': 5, 'encoder_hidden_size': 100, 'context_size': 20, 'decoder_hidden_size': 100,
+         'decoder_layers': 2, 'max_steps': 500, 'val_check_steps': 50, 'batch_size': 64, 'scaler_type': 'standard'}),
+        (1440, 336, {'encoder_n_layers': 2, 'encoder_hidden_size': 200, 'context_size': 5, 'decoder_hidden_size': 200,
+         'decoder_layers': 1, 'max_steps': 500, 'val_check_steps': 100, 'batch_size': 64, 'scaler_type': 'minmax'}),
+        (17520, 8760, {})
     ]
 
     combined_data = loaddataset()
@@ -139,7 +145,8 @@ if __name__ == '__main__':
 
         start_time = time.time()
 
-        data = sample_data_with_train_window(neuralforecast_data, date_start, date_end, window_train_size)
+        data = sample_data_with_train_window(
+            neuralforecast_data, date_start, date_end, window_train_size)
         results = np.array([])
         iterations = 0
         max_iterations = math.ceil(8760 / forecast_horizon)
@@ -153,13 +160,17 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = NHITS(h=forecast_horizon, loss=RMSE(), input_size=model_config['input_size'], max_steps=model_config['max_steps'], 
-                          val_check_steps=model_config['val_check_steps'], batch_size=model_config['batch_size'], step_size=model_config['step_size'], 
-                          scaler_type=model_config['scaler_type'])
+            model = LSTM(h=forecast_horizon, loss=RMSE(),
+                         encoder_n_layers=model_config['encoder_n_layers'], encoder_hidden_size=model_config['encoder_hidden_size'],
+                         context_size=model_config['context_size'], decoder_hidden_size=model_config['decoder_hidden_size'],
+                         decoder_layers=model_config['decoder_layers'], max_steps=model_config['max_steps'],
+                         val_check_steps=model_config['val_check_steps'], batch_size=model_config['batch_size'],
+                         scaler_type=model_config['scaler_type'])
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:
-                raise RuntimeError(f'Model failed to fit and forecast at iteration {iterations}')
+                raise RuntimeError(
+                    f'Model failed to fit and forecast at iteration {iterations}')
 
             results = np.append(results, predictions.values)
             data = data.iloc[forecast_horizon:]
@@ -170,7 +181,8 @@ if __name__ == '__main__':
 
         df_true = sample_data(df, date_start, date_end)
         df_predictions = pd.DataFrame(results)
-        df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
+        df_predictions.index = pd.date_range(
+            start=date_start, periods=len(results), freq='h')
 
         save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
                                   prediction_path=f'{config_name}.csv',

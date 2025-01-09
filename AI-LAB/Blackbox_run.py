@@ -153,7 +153,7 @@ if __name__ == '__main__':
                 forecast_horizon = 8760 - len(results)
 
             data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-            model = DLinear(h=forecast_horizon)
+            model = DLinear(h=forecast_horizon, input_size=24)
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:

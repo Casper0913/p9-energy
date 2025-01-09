@@ -24,7 +24,9 @@ df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
 df['HourDK'] = pd.to_datetime(df['HourDK'])
 df['ConsumptionkWh'] = df['ConsumptionkWh'].str.replace(",", ".").astype(float)
 df.index = df['HourDK']
-df.drop(columns=['HourUTC', 'HourDK', 'MunicipalityNo', 'Branche'], inplace=True)
+df.drop(columns=['HourUTC', 'HourDK',
+        'MunicipalityNo', 'Branche'], inplace=True)
+
 
 def loaddataset():
     consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
@@ -104,7 +106,8 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
     try:
         df_stats = pd.read_csv(stats_path)
     except:
-        df_stats = pd.DataFrame(columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
+        df_stats = pd.DataFrame(
+            columns=['model', 'runtime', 'mse', 'rmse', 'mae', 'mape'])
 
     new_row = {'model': config_name, 'runtime': runtime,
                'mse': mean_squared_error(df_predictions, df_true),
@@ -120,13 +123,14 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
 
 if __name__ == '__main__':
-    model_name = 'DLinear'
+    model_name = 'Informer'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {}),
+        (336, 24, {'input_size': 12, 'hidden_size': 384, 'n_head': 8, 'conv_hidden_size': 256, 'encoder_layers': 3,
+         'decoder_layers': 4, 'max_steps': 3000, 'val_check_steps': 250, 'batch_size': 16, 'scaler_type': 'minmax'}),
         (1440, 336, {}),
         (17520, 8760, {})
     ]
@@ -140,7 +144,8 @@ if __name__ == '__main__':
 
         start_time = time.time()
 
-        data = sample_data_with_train_window(neuralforecast_data, date_start, date_end, window_train_size)
+        data = sample_data_with_train_window(
+            neuralforecast_data, date_start, date_end, window_train_size)
         results = np.array([])
         iterations = 0
         max_iterations = math.ceil(8760 / forecast_horizon)
@@ -152,12 +157,19 @@ if __name__ == '__main__':
             if (len(results) + forecast_horizon) > 8760:
                 forecast_horizon = 8760 - len(results)
 
-            data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
-            model = DLinear(h=forecast_horizon, input_size=24)
+            data_train, data_test = get_next_window(
+                data, window_train_size, forecast_horizon)
+            model = Informer(h=forecast_horizon,
+                             input_size=model_config['input_size'], hidden_size=model_config['hidden_size'],
+                             n_head=model_config['n_head'], conv_hidden_size=model_config['conv_hidden_size'],
+                             encoder_layers=model_config['encoder_layers'], decoder_layers=model_config['decoder_layers'],
+                             max_steps=model_config['max_steps'], val_check_steps=model_config['val_check_steps'],
+                             batch_size=model_config['batch_size'], scaler_type=model_config['scaler_type'])
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:
-                raise RuntimeError(f'Model failed to fit and forecast at iteration {iterations}')
+                raise RuntimeError(
+                    f'Model failed to fit and forecast at iteration {iterations}')
 
             results = np.append(results, predictions.values)
             data = data.iloc[forecast_horizon:]
@@ -168,7 +180,8 @@ if __name__ == '__main__':
 
         df_true = sample_data(df, date_start, date_end)
         df_predictions = pd.DataFrame(results)
-        df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
+        df_predictions.index = pd.date_range(
+            start=date_start, periods=len(results), freq='h')
 
         save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
                                   prediction_path=f'{config_name}.csv',

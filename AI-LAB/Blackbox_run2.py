@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoNHITS(h=forecast_horizon, config=config_nhits, loss=RMSE(), backend='optuna', num_samples=50)
+            model = AutoDLinear(h=forecast_horizon, loss=RMSE(), backend='optuna', num_samples=50)
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:

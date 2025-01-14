@@ -122,8 +122,9 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
     df_stats.to_csv(stats_path, index=False)
 
+
 if __name__ == '__main__':
-    model_name = 'AutoNHITS'
+    model_name = 'AutoDLinear'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
@@ -158,7 +159,7 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoNHITS(h=forecast_horizon, loss=RMSE(), backend='optuna', num_samples=50)
+            model = AutoNHITS(h=forecast_horizon, config=config_nhits, loss=RMSE(), backend='optuna', num_samples=50)
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:

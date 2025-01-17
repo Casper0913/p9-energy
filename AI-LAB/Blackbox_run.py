@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {}),
+        # (336, 24, {}),
         (1440, 336, {}),
         (17520, 8760, {})
     ]

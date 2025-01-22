@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import time
 
+from ray import tune
+import optuna
+
 from neuralforecast import NeuralForecast
 from neuralforecast.models import LSTM, Informer, NHITS, DLinear
 from neuralforecast.auto import AutoNHITS, AutoDLinear
@@ -19,7 +22,10 @@ from sklearn.metrics import mean_absolute_percentage_error
 import warnings
 warnings.filterwarnings('once')
 
+
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 os.environ['NIXTLA_ID_AS_COL'] = '1'
+
 
 df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
 df['HourDK'] = pd.to_datetime(df['HourDK'])
@@ -95,7 +101,7 @@ def get_next_window(data, train_window_size, forecast_horizon):
     return data[:train_window_size], data[train_window_size:train_window_size + forecast_horizon]
 
 
-def forecast_blackbox_model(model, model_name):
+def forecast_blackbox_model(model, model_name, data_train, data_test):
     nf = NeuralForecast(models=[model], freq='H')
     nf.fit(data_train)
     return nf.predict(data_test)[model_name]
@@ -121,6 +127,63 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
         by=['model', 'rmse'], ascending=True).reset_index(drop=True)
 
     df_stats.to_csv(stats_path, index=False)
+
+
+# default_config = {
+#     "input_size": 24,
+#     "h": None,
+#     "n_pool_kernel_size": tune.choice(
+#         [[2, 2, 1], 3 * [1], 3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
+#     ),
+#     "n_freq_downsample": tune.choice(
+#         [
+#             [168, 24, 1],
+#             [24, 12, 1],
+#             [180, 60, 1],
+#             [60, 8, 1],
+#             [40, 20, 1],
+#             [1, 1, 1],
+#         ]
+#     ),
+#     "learning_rate": tune.loguniform(1e-4, 1e-1),
+#     "scaler_type": tune.choice([None, "robust", "standard"]),
+#     "max_steps": tune.quniform(lower=500, upper=1500, q=100),
+#     "batch_size": tune.choice([32, 64, 128, 256]),
+#     "windows_batch_size": tune.choice([128, 256, 512, 1024]),
+#     "loss": None,
+#     "random_seed": tune.randint(lower=1, upper=20),
+#     "start_padding_enabled": True
+# }
+
+def objective(trial):
+    config = {
+        "input_size": 24,
+        "h": None,
+        "n_pool_kernel_size": trial.suggest_categorical(
+            "n_pool_kernel_size", [[2, 2, 1], 3 * [1],
+                                   3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
+        ),
+        "n_freq_downsample": trial.suggest_categorical(
+            "n_freq_downsample", [
+                [168, 24, 1],
+                [24, 12, 1],
+                [180, 60, 1],
+                [60, 8, 1],
+                [40, 20, 1],
+                [1, 1, 1],
+            ]
+        ),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-4, 1e-1),
+        "scaler_type": trial.suggest_categorical("scaler_type", [None, "robust", "standard"]),
+        "max_steps": trial.suggest_int("max_steps", 500, 1500, step=100),
+        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
+        "windows_batch_size": trial.suggest_categorical("windows_batch_size", [128, 256, 512, 1024]),
+        "loss": None,
+        "random_seed": trial.suggest_int("random_seed", 1, 20),
+        "start_padding_enabled": True
+    }
+    return config
+
 
 if __name__ == '__main__':
     model_name = 'AutoNHITS'
@@ -158,9 +221,11 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoNHITS(h=forecast_horizon, loss=RMSE(), backend='optuna', num_samples=50)
+            model = AutoNHITS(h=forecast_horizon, loss=RMSE(), backend='optuna',
+                              num_samples=50, verbose=1, config=objective)
             try:
-                predictions = forecast_blackbox_model(model, model_name)
+                predictions = forecast_blackbox_model(
+                    model, model_name, data_train, data_test)
             except Exception as e:
                 raise RuntimeError(
                     f'Model failed to fit and forecast at iteration {iterations}')

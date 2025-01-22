@@ -3,3 +3,4 @@
 .DS_Store
 
 /Models/Training_data/runs  
+/AI-LAB/lightning_logs

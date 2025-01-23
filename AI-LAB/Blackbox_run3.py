@@ -4,16 +4,10 @@ import numpy as np
 import pandas as pd
 import time
 
-from ray import tune
-import optuna
-
 from neuralforecast import NeuralForecast
 from neuralforecast.models import LSTM, Informer, NHITS, DLinear
 from neuralforecast.auto import AutoNHITS, AutoDLinear
 from neuralforecast.losses.pytorch import RMSE
-
-from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA
 
 from datetime import datetime, timedelta
 
@@ -25,10 +19,7 @@ from sklearn.metrics import mean_absolute_percentage_error
 import warnings
 warnings.filterwarnings('once')
 
-
-os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 os.environ['NIXTLA_ID_AS_COL'] = '1'
-
 
 df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
 df['HourDK'] = pd.to_datetime(df['HourDK'])
@@ -83,17 +74,6 @@ def prepare_neuralforecast_data(combined_data):
 
     return combined_data[['unique_id', 'ds', 'y'] + [col for col in combined_data.columns if col not in ['unique_id', 'ds', 'y']]]
 
-def prepare_statsforecast_data(combined_data):
-    combined_data = combined_data.reset_index(drop=True)
-
-    combined_data = combined_data.rename(
-        columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
-
-    combined_data['unique_id'] = "1"
-    combined_data['ds'] = combined_data['ds'].astype('object')
-    combined_data['unique_id'] = combined_data['unique_id'].astype('object')
-    combined_data['ds'] = pd.to_datetime(combined_data['ds'])
-    return combined_data[['unique_id', 'ds', 'y']]
 
 def sample_data(df, start_date, end_date):
     end_date = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(hours=25)
@@ -115,17 +95,11 @@ def get_next_window(data, train_window_size, forecast_horizon):
     return data[:train_window_size], data[train_window_size:train_window_size + forecast_horizon]
 
 
-def forecast_blackbox_model(model, model_name, data_train, data_test):
+def forecast_blackbox_model(model, model_name):
     nf = NeuralForecast(models=[model], freq='H')
     nf.fit(data_train)
     return nf.predict(data_test)[model_name]
 
-def forecast_statsforecast_model(model):
-    sf = StatsForecast(models=[model], freq='H')
-    data_train.reset_index(drop=True, inplace=True)
-    data_test.reset_index(drop=True, inplace=True)
-    sf.fit(df=data_train)
-    return sf.predict(h=len(data_test))
 
 def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, prediction_path, stats_path):
     df_predictions.to_csv(prediction_path, header=False)
@@ -149,76 +123,20 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
     df_stats.to_csv(stats_path, index=False)
 
 
-# default_config = {
-#     "input_size": 24,
-#     "h": None,
-#     "n_pool_kernel_size": tune.choice(
-#         [[2, 2, 1], 3 * [1], 3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
-#     ),
-#     "n_freq_downsample": tune.choice(
-#         [
-#             [168, 24, 1],
-#             [24, 12, 1],
-#             [180, 60, 1],
-#             [60, 8, 1],
-#             [40, 20, 1],
-#             [1, 1, 1],
-#         ]
-#     ),
-#     "learning_rate": tune.loguniform(1e-4, 1e-1),
-#     "scaler_type": tune.choice([None, "robust", "standard"]),
-#     "max_steps": tune.quniform(lower=500, upper=1500, q=100),
-#     "batch_size": tune.choice([32, 64, 128, 256]),
-#     "windows_batch_size": tune.choice([128, 256, 512, 1024]),
-#     "loss": None,
-#     "random_seed": tune.randint(lower=1, upper=20),
-#     "start_padding_enabled": True
-# }
-
-def objective(trial):
-    config = {
-        "input_size": 17520,
-        "h": None,
-        "n_pool_kernel_size": trial.suggest_categorical(
-            "n_pool_kernel_size", [[2, 2, 1], 3 * [1],
-                                   3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
-        ),
-        "n_freq_downsample": trial.suggest_categorical(
-            "n_freq_downsample", [
-                [168, 24, 1],
-                [24, 12, 1],
-                [180, 60, 1],
-                [60, 8, 1],
-                [40, 20, 1],
-                [1, 1, 1],
-            ]
-        ),
-        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-4, 1e-1),
-        "scaler_type": trial.suggest_categorical("scaler_type", [None, "robust", "standard"]),
-        "max_steps": trial.suggest_int("max_steps", 500, 1500, step=100),
-        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
-        "windows_batch_size": trial.suggest_categorical("windows_batch_size", [128, 256, 512, 1024]),
-        "loss": None,
-        "random_seed": trial.suggest_int("random_seed", 1, 20),
-        "start_padding_enabled": True
-    }
-    return config
-
-
 if __name__ == '__main__':
-    model_name = 'AutoARIMA'
+    model_name = 'AutoDLinear'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
-        (336, 24, {}),
-        (1440, 336, {}),
+        # (336, 24, {}),
+        # (1440, 336, {}),
         (17520, 8760, {})
     ]
 
     combined_data = loaddataset()
-    neuralforecast_data = prepare_statsforecast_data(combined_data)
+    neuralforecast_data = prepare_neuralforecast_data(combined_data)
 
     for window_train_size, forecast_horizon, model_config in scenarios:
         config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
@@ -241,9 +159,9 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoARIMA(season_length=12)
+            model = AutoDLinear(h=forecast_horizon, loss=RMSE(), backend='optuna', num_samples=50)
             try:
-                predictions = forecast_statsforecast_model(model)
+                predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:
                 raise RuntimeError(
                     f'Model failed to fit and forecast at iteration {iterations}')

@@ -157,7 +157,7 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
 def objective(trial):
     config = {
-        "input_size": 24,
+        "input_size": 17520,
         "h": None,
         "n_pool_kernel_size": trial.suggest_categorical(
             "n_pool_kernel_size", [[2, 2, 1], 3 * [1],
@@ -222,7 +222,7 @@ if __name__ == '__main__':
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
             model = AutoNHITS(h=forecast_horizon, loss=RMSE(), backend='optuna',
-                              num_samples=50, verbose=1, config=objective)
+                              num_samples=50, config=objective)
             try:
                 predictions = forecast_blackbox_model(
                     model, model_name, data_train, data_test)

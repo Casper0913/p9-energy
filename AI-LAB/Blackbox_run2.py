@@ -19,6 +19,7 @@ from sklearn.metrics import mean_absolute_percentage_error
 import warnings
 warnings.filterwarnings('once')
 
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 os.environ['NIXTLA_ID_AS_COL'] = '1'
 
 df = pd.read_csv('../Dataset/ConsumptionIndustry.csv', sep=';')
@@ -123,6 +124,23 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
     df_stats.to_csv(stats_path, index=False)
 
 
+def objective(trial):
+    config = {
+        "input_size": 17520,
+        "h": None,
+        "moving_avg_window": trial.suggest_categorical("moving_avg_window", [11, 25, 51]),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-4, 1e-1),
+        "scaler_type": trial.suggest_categorical("scaler_type", [None, "robust", "standard"]),
+        "max_steps": trial.suggest_int("max_steps", 500, 1500, step=100),
+        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
+        "windows_batch_size": trial.suggest_categorical("windows_batch_size", [128, 256, 512, 1024]),
+        "loss": None,
+        "random_seed": trial.suggest_int("random_seed", 1, 20),
+        "start_padding_enabled": True,
+    }
+    return config
+
+
 if __name__ == '__main__':
     model_name = 'AutoDLinear'
     date_start = '2023-11-01'
@@ -159,7 +177,8 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoDLinear(h=forecast_horizon, loss=RMSE(), backend='optuna', num_samples=50)
+            model = AutoDLinear(h=forecast_horizon, loss=RMSE(),
+                                backend='optuna', num_samples=50, config=objective)
             try:
                 predictions = forecast_blackbox_model(model, model_name)
             except Exception as e:

@@ -206,15 +206,15 @@ def objective(trial):
 
 
 if __name__ == '__main__':
-    model_name = 'AutoARIMA'
+    model_name = 'AutoARIMA2'
     date_start = '2023-11-01'
     date_end = '2024-11-01'
 
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
         (336, 24, {}),
-        # (1440, 336, {}),
-        # (17520, 8760, {})
+        (1440, 336, {}),
+        (17520, 8760, {})
     ]
 
     combined_data = loaddataset()
@@ -241,7 +241,7 @@ if __name__ == '__main__':
 
             data_train, data_test = get_next_window(
                 data, window_train_size, forecast_horizon)
-            model = AutoARIMA(season_length=12)
+            model = AutoARIMA()
             try:
                 predictions = forecast_statsforecast_model(model)
             except Exception as e:

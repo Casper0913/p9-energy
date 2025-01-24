@@ -125,7 +125,7 @@ def forecast_statsforecast_model(model):
     data_train.reset_index(drop=True, inplace=True)
     data_test.reset_index(drop=True, inplace=True)
     sf.fit(df=data_train)
-    return sf.predict(h=len(data_test))
+    return sf.predict(h=len(data_test))['AutoARIMA']
 
 def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, prediction_path, stats_path):
     df_predictions.to_csv(prediction_path, header=False)
@@ -213,8 +213,8 @@ if __name__ == '__main__':
     # List of (window_train_size, forecast_horizon, model_config) tuples
     scenarios = [
         (336, 24, {}),
-        (1440, 336, {}),
-        (17520, 8760, {})
+        # (1440, 336, {}),
+        # (17520, 8760, {})
     ]
 
     combined_data = loaddataset()

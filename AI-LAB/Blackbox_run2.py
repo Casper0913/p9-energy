@@ -189,8 +189,8 @@ if __name__ == '__main__':
 
     combined_data = loaddataset()
     shorthand_data = prepare_neuralforecast_data(combined_data)
-    historic_exog = combined_data[['SpotPriceDKK']]
-    future_exog = combined_data[['Hour', 'DayOfWeek', 'IsWeekend']].copy()
+    historic_exog = shorthand_data[['SpotPriceDKK']]
+    future_exog = shorthand_data[['ds', 'Hour', 'DayOfWeek', 'IsWeekend']].copy()
     future_exog['unique_id'] = 1
 
     warnings.filterwarnings("ignore")
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     try:
         nf = NeuralForecast(models=[model2], freq='H')
         nf.fit(data_train)
-        predictions = nf.predict()
+        predictions = nf.predict(futr_df=future_exog)
         predictions.columns = predictions.columns.str.replace('-median', '')
     except Exception as e:
         raise RuntimeError(e)

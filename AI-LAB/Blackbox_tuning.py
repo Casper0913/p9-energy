@@ -6,9 +6,8 @@ import optuna
 
 from neuralforecast import NeuralForecast
 from neuralforecast.models import LSTM, Informer, NHITS, DLinear
-from neuralforecast.losses.pytorch import RMSE
+from neuralforecast.losses.pytorch import RMSE, MAE
 from neuralforecast.losses.pytorch import DistributionLoss
-from pytorch_forecasting import MAE
 
 from datetime import datetime, timedelta
 
@@ -69,15 +68,11 @@ def prepare_neuralforecast_data(combined_data):
 
 
 def sample_data_with_train_window(df, start_date, end_date, train_window_size):
-    if not pd.api.types.is_datetime64_any_dtype(df.index):
-        df.index = pd.to_datetime(df['ds'])
-
     start_date = datetime.strptime(
         start_date, '%Y-%m-%d') - timedelta(hours=train_window_size) + timedelta(hours=24)
     end_date = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(hours=24)
 
     return df[(df.index >= start_date) & (df.index <= end_date)]
-
 
 def get_next_window(data, train_window_size, forecast_horizon):
     return data[:train_window_size], data[train_window_size:train_window_size + forecast_horizon]
@@ -169,9 +164,9 @@ def objective_DLinear(trial, data_train, data_test, forecast_horizon):
     return root_mean_squared_error(data_test['y'], predictions['DLinear'])
 
 
-def objective_NHITS(trial, data_train, data_test, forecast_horizon):
+def objective_NHITS(trial, data_train, data_test, forecast_horizon, future_exog):
     nf = NeuralForecast(
-        models=[NHITS(h=forecast_horizon, loss=RMSE(),
+        models=[NHITS(h=forecast_horizon, loss=MAE(), hist_exog_list=['SpotPriceDKK'], futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend'],
                       input_size=trial.suggest_categorical(
                           'input_size', [1, 2, 6, 12, 24, 48]),
                       max_steps=trial.suggest_categorical(
@@ -189,18 +184,18 @@ def objective_NHITS(trial, data_train, data_test, forecast_horizon):
         freq='H'
     )
     nf.fit(data_train)
-    predictions = nf.predict(data_test)
+    predictions = nf.predict(futr_df=future_exog)
     return root_mean_squared_error(data_test['y'], predictions['NHITS'])
 
 
 if __name__ == '__main__':
-    date_start = '2023-11-01'
-    date_end = '2024-11-01'
-    window_train_size = 17520  # hours
-    forecast_horizon = 8760  # hours
+    date_start = '2021-01-15'
+    date_end = '2021-02-01'
+    window_train_size = 336  # hours
+    forecast_horizon = 24  # hours
     # 336_24, 1440_336, 17520_8760
-    trials = 20
-    model_name = f'LSTM_{window_train_size}_{forecast_horizon}'
+    trials = 50
+    model_name = f'NHITS_{window_train_size}_{forecast_horizon}'
 
     combined_data = loaddataset()
     neuralforecast_data = prepare_neuralforecast_data(combined_data)
@@ -208,10 +203,13 @@ if __name__ == '__main__':
         neuralforecast_data, date_start, date_end, window_train_size)
     data_train, data_test = get_next_window(
         data, window_train_size, forecast_horizon)
-
+    
+    future_exog = data[['ds', 'Hour', 'DayOfWeek', 'IsWeekend']].copy()
+    future_exog['unique_id'] = 1
+    
     def safe_objective(trial):
         try:
-            return objective_LSTM(trial, data_train, data_test, forecast_horizon)
+            return objective_NHITS(trial, data_train, data_test, forecast_horizon, future_exog)
         except Exception as e:
             print(f"Failed trial: {e}. Skipped this trial.")
             return float('inf')

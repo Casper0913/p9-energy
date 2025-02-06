@@ -191,7 +191,7 @@ if __name__ == '__main__':
     shorthand_data = prepare_neuralforecast_data(combined_data)
     historic_exog = combined_data[['SpotPriceDKK']]
     future_exog = combined_data[['Hour', 'DayOfWeek', 'IsWeekend']]
-    future_exog['unique_id'] = 1
+    future_exog['unique_id'] = 2
 
     warnings.filterwarnings("ignore")
 

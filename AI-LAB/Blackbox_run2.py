@@ -200,7 +200,7 @@ if __name__ == '__main__':
     data_train, data_test = get_next_window(shorthand_data, window_train_size, forecast_horizon)
 
     model = AutoNHITS(h=forecast_horizon, config=config_nhits, loss=MAE(), backend='optuna', num_samples=50)
-    model2 = NHITS(h=forecast_horizon, input_size=2,  loss=MAE(), hist_exog_list=historic_exog, futr_exog_list=future_exog)
+    model2 = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), hist_exog_list=['SpotPriceDKK'], futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend'])
 
     try:
         nf = NeuralForecast(models=[model2], freq='H')

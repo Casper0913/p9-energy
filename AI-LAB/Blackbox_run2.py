@@ -204,7 +204,7 @@ if __name__ == '__main__':
     try:
         nf = NeuralForecast(models=[model2], freq='H')
         nf.fit(data_train)
-        predictions = nf.predict()
+        predictions = nf.predict(futr_df=future_exog)
         predictions.columns = predictions.columns.str.replace('-median', '')
     except Exception as e:
         raise RuntimeError(e)

@@ -10,7 +10,9 @@ import optuna
 from neuralforecast import NeuralForecast
 from neuralforecast.models import LSTM, Informer, NHITS, DLinear
 from neuralforecast.auto import AutoNHITS, AutoDLinear
-from neuralforecast.losses.pytorch import RMSE
+from neuralforecast.losses.pytorch import RMSE, MAE
+
+from utilsforecast.plotting import plot_series
 
 from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA
@@ -59,29 +61,18 @@ def loaddataset():
     combined_data = combined_data.drop(
         ['HourUTC_x', 'HourUTC_y', 'SpotPriceEUR', 'MunicipalityNo', 'Branche', 'PriceArea'], axis=1)
 
-    # Set HourDK as index
-    combined_data.index = pd.to_datetime(
-        combined_data['HourDK'])  # Ensure index is datetime
-
     combined_data['HourDK'] = pd.to_datetime(combined_data['HourDK'])
     combined_data['Hour'] = combined_data['HourDK'].dt.hour
     combined_data['DayOfWeek'] = combined_data['HourDK'].dt.dayofweek
     combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([
                                                                  5, 6]).astype(int)
-
     return combined_data
-
 
 def prepare_neuralforecast_data(combined_data):
     combined_data = combined_data.reset_index(drop=True)
-
-    combined_data = combined_data.rename(
-        columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
-
+    combined_data = combined_data.rename(columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
     combined_data['unique_id'] = 1
-    combined_data.index = pd.to_datetime(combined_data['ds'])
-
-    return combined_data[['unique_id', 'ds', 'y'] + [col for col in combined_data.columns if col not in ['unique_id', 'ds', 'y']]]
+    return combined_data
 
 def prepare_statsforecast_data(combined_data):
     combined_data = combined_data.reset_index(drop=True)
@@ -98,7 +89,6 @@ def prepare_statsforecast_data(combined_data):
 def sample_data(df, start_date, end_date):
     end_date = datetime.strptime(end_date, '%Y-%m-%d') - timedelta(hours=25)
     return df[(df.index >= start_date) & (df.index <= end_date)]
-
 
 def sample_data_with_train_window(df, start_date, end_date, train_window_size):
     if not pd.api.types.is_datetime64_any_dtype(df.index):
@@ -148,118 +138,87 @@ def save_prediction_and_stats(runtime, config_name, df_predictions, df_true, pre
 
     df_stats.to_csv(stats_path, index=False)
 
-
-# default_config = {
-#     "input_size": 24,
-#     "h": None,
-#     "n_pool_kernel_size": tune.choice(
-#         [[2, 2, 1], 3 * [1], 3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
-#     ),
-#     "n_freq_downsample": tune.choice(
-#         [
-#             [168, 24, 1],
-#             [24, 12, 1],
-#             [180, 60, 1],
-#             [60, 8, 1],
-#             [40, 20, 1],
-#             [1, 1, 1],
-#         ]
-#     ),
-#     "learning_rate": tune.loguniform(1e-4, 1e-1),
-#     "scaler_type": tune.choice([None, "robust", "standard"]),
-#     "max_steps": tune.quniform(lower=500, upper=1500, q=100),
-#     "batch_size": tune.choice([32, 64, 128, 256]),
-#     "windows_batch_size": tune.choice([128, 256, 512, 1024]),
-#     "loss": None,
-#     "random_seed": tune.randint(lower=1, upper=20),
-#     "start_padding_enabled": True
-# }
-
-def objective(trial):
-    config = {
-        "input_size": 17520,
-        "h": None,
-        "n_pool_kernel_size": trial.suggest_categorical(
-            "n_pool_kernel_size", [[2, 2, 1], 3 * [1],
-                                   3 * [2], 3 * [4], [8, 4, 1], [16, 8, 1]]
-        ),
-        "n_freq_downsample": trial.suggest_categorical(
-            "n_freq_downsample", [
-                [168, 24, 1],
-                [24, 12, 1],
-                [180, 60, 1],
-                [60, 8, 1],
-                [40, 20, 1],
-                [1, 1, 1],
-            ]
-        ),
-        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-4, 1e-1),
-        "scaler_type": trial.suggest_categorical("scaler_type", [None, "robust", "standard"]),
-        "max_steps": trial.suggest_int("max_steps", 500, 1500, step=100),
-        "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128, 256]),
-        "windows_batch_size": trial.suggest_categorical("windows_batch_size", [128, 256, 512, 1024]),
-        "loss": None,
-        "random_seed": trial.suggest_int("random_seed", 1, 20),
-        "start_padding_enabled": True
+def config_nhits(trial):
+    return {
+        "input_size": trial.suggest_categorical(          # Length of input window
+            "input_size", (48, 48*2, 48*3)                
+        ),                                                
+        "start_padding_enabled": True,                                          
+        "n_blocks": 5 * [1],                              # Length of input window
+        "mlp_units": 5 * [[64, 64]],                      # Length of input window
+        "n_pool_kernel_size": trial.suggest_categorical(  # MaxPooling Kernel size
+            "n_pool_kernel_size",
+            (5*[1], 5*[2], 5*[4], [8, 4, 2, 1, 1])
+        ),     
+        "n_freq_downsample": trial.suggest_categorical(   # Interpolation expressivity ratios
+            "n_freq_downsample",
+            ([8, 4, 2, 1, 1],  [1, 1, 1, 1, 1])
+        ),     
+        "learning_rate": trial.suggest_float(             # Initial Learning rate
+            "learning_rate",
+            low=1e-4,
+            high=1e-2,
+            log=True,
+        ),            
+        "scaler_type": None,                              # Scaler type
+        "max_steps": 1000,                                # Max number of training iterations
+        "batch_size": trial.suggest_categorical(          # Number of series in batch
+            "batch_size",
+            (1, 4, 10),
+        ),                   
+        "windows_batch_size": trial.suggest_categorical(  # Number of windows in batch
+            "windows_batch_size",
+            (128, 256, 512),
+        ),      
+        "random_seed": trial.suggest_int(                 # Random seed   
+            "random_seed",
+            low=1,
+            high=20,
+        ),                      
     }
-    return config
-
 
 if __name__ == '__main__':
-    model_name = 'AutoARIMA2'
-    date_start = '2023-11-01'
-    date_end = '2024-11-01'
+    model_name = 'AutoNHITS'
+    date_start = '2021-01-15'
+    date_end = '2021-02-01'
 
-    # List of (window_train_size, forecast_horizon, model_config) tuples
-    scenarios = [
-        (336, 24, {}),
-        (1440, 336, {}),
-        (17520, 8760, {})
-    ]
+    window_train_size = 336
+    forecast_horizon = 24
+    config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
+    results = np.array([])
 
     combined_data = loaddataset()
-    neuralforecast_data = prepare_statsforecast_data(combined_data)
+    shorthand_data = prepare_neuralforecast_data(combined_data)
+    historic_exog = combined_data[['SpotPriceDKK']]
+    future_exog = combined_data[['Hour', 'DayOfWeek', 'IsWeekend']]
 
-    for window_train_size, forecast_horizon, model_config in scenarios:
-        config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
-        warnings.filterwarnings("ignore")
+    warnings.filterwarnings("ignore")
 
-        start_time = time.time()
+    start_time = time.time()
 
-        data = sample_data_with_train_window(
-            neuralforecast_data, date_start, date_end, window_train_size)
-        results = np.array([])
-        iterations = 0
-        max_iterations = math.ceil(8760 / forecast_horizon)
+    data_train, data_test = get_next_window(shorthand_data, window_train_size, forecast_horizon)
 
-        while len(results) < 8760:
-            iterations += 1
-            print(f'{config_name}: Iteration {iterations}/{max_iterations}')
+    model = AutoNHITS(h=forecast_horizon, config=config_nhits, loss=MAE(), backend='optuna', num_samples=50)
+    model2 = NHITS(h=forecast_horizon, input_size=2,  loss=MAE(), hist_exog_list=historic_exog, futr_exog_list=future_exog)
 
-            if (len(results) + forecast_horizon) > 8760:
-                forecast_horizon = 8760 - len(results)
+    try:
+        nf = NeuralForecast(models=[model], freq='H')
+        nf.fit(data_train)
+        predictions = nf.predict()
+        predictions.columns = predictions.columns.str.replace('-median', '')
+    except Exception as e:
+        raise RuntimeError(e)
 
-            data_train, data_test = get_next_window(
-                data, window_train_size, forecast_horizon)
-            model = AutoARIMA()
-            try:
-                predictions = forecast_statsforecast_model(model)
-            except Exception as e:
-                raise RuntimeError(
-                    f'Model failed to fit and forecast at iteration {iterations}')
+    results = np.append(results, predictions[model_name].values)
 
-            results = np.append(results, predictions.values)
-            data = data.iloc[forecast_horizon:]
+    end_time = time.time()
 
-        end_time = time.time()
+    warnings.filterwarnings("default")
 
-        warnings.filterwarnings("default")
+    df_true = df.loc[(df.index >= '2021-01-15 00:00:00') & (df.index <= '2021-01-15 23:00:00')]
+    df_predictions = pd.DataFrame(results)
+    df_predictions.index = pd.date_range(start=date_start, periods=len(results), freq='h')
 
-        df_true = sample_data(df, date_start, date_end)
-        df_predictions = pd.DataFrame(results)
-        df_predictions.index = pd.date_range(
-            start=date_start, periods=len(results), freq='h')
+    save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true, prediction_path=f'{config_name}.csv', stats_path=f'blackbox_run_stats.csv')
 
-        save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true,
-                                  prediction_path=f'{config_name}.csv',
-                                  stats_path=f'blackbox_run_stats.csv')
+    plot_series(shorthand_data.head(window_train_size + len(predictions)), predictions) #plot_random=False, max_insample_length=48 * 3, level=[80, 90]

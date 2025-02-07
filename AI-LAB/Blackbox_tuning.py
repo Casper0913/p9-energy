@@ -42,29 +42,18 @@ def loaddataset():
     combined_data = combined_data.drop(
         ['HourUTC_x', 'HourUTC_y', 'SpotPriceEUR', 'MunicipalityNo', 'Branche', 'PriceArea'], axis=1)
 
-    # Set HourDK as index
-    combined_data.index = pd.to_datetime(
-        combined_data['HourDK'])  # Ensure index is datetime
-
     combined_data['HourDK'] = pd.to_datetime(combined_data['HourDK'])
     combined_data['Hour'] = combined_data['HourDK'].dt.hour
     combined_data['DayOfWeek'] = combined_data['HourDK'].dt.dayofweek
     combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([
                                                                  5, 6]).astype(int)
-
     return combined_data
-
 
 def prepare_neuralforecast_data(combined_data):
     combined_data = combined_data.reset_index(drop=True)
-
-    combined_data = combined_data.rename(
-        columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
-
+    combined_data = combined_data.rename(columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
     combined_data['unique_id'] = 1
-    combined_data.index = pd.to_datetime(combined_data['ds'])
-
-    return combined_data[['unique_id', 'ds', 'y'] + [col for col in combined_data.columns if col not in ['unique_id', 'ds', 'y']]]
+    return combined_data
 
 
 def sample_data_with_train_window(df, start_date, end_date, train_window_size):
@@ -166,27 +155,31 @@ def objective_DLinear(trial, data_train, data_test, forecast_horizon):
 
 def objective_NHITS(trial, data_train, data_test, forecast_horizon, future_exog):
     nf = NeuralForecast(
-        models=[NHITS(h=forecast_horizon, loss=MAE(), hist_exog_list=['SpotPriceDKK'], futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend'],
-                      input_size=trial.suggest_categorical(
-                          'input_size', [1, 2, 6, 12, 24, 48]),
-                      max_steps=trial.suggest_categorical(
-                          'max_steps', [200, 500, 1000, 3000]),
-                      val_check_steps=trial.suggest_categorical(
-                          'val_check_steps', [10, 20, 50, 100, 250, 500]),
-                      batch_size=trial.suggest_categorical(
-                          'batch_size', [16, 32, 64, 128]),
-                      step_size=trial.suggest_categorical(
-                          'step_size', [1, 2, 3, 4, 5]),
-                      scaler_type=trial.suggest_categorical(
-                          'scaler_type', ['standard', 'minmax', 'robust', 'identity']),
-                      )
-                ],
-        freq='H'
-    )
+    models=[NHITS(
+        h=forecast_horizon, 
+        loss=MAE(), 
+        hist_exog_list=['SpotPriceDKK'], 
+        futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend'],
+        start_padding_enabled=True, 
+        n_blocks=5 * [1], 
+        mlp_units=5 * [[64, 64]], 
+        random_seed=trial.suggest_int("random_seed", low=1, high=20),
+        n_pool_kernel_size=trial.suggest_categorical("n_pool_kernel_size", (5*[1], 5*[2], 5*[4], [8, 4, 2, 1, 1])),
+        n_freq_downsample=trial.suggest_categorical("n_freq_downsample", ([8, 4, 2, 1, 1],  [1, 1, 1, 1, 1])),
+        learning_rate=trial.suggest_float("learning_rate", low=1e-4, high=1e-2, log=True),
+        windows_batch_size=trial.suggest_categorical('windows_batch_size', [128, 256, 512]),
+        input_size=trial.suggest_categorical('input_size', [1, 2, 6, 12, 24, 48, 48*2, 48*3]),
+        max_steps=trial.suggest_categorical('max_steps', [500, 1000, 1500]),
+        val_check_steps=trial.suggest_categorical('val_check_steps', [10, 20, 50, 100, 250, 500]),
+        batch_size=trial.suggest_categorical('batch_size', [1, 4, 10, 16, 32, 64, 128]),
+        step_size=trial.suggest_categorical('step_size', [1, 2, 3, 4, 5]),
+        scaler_type=trial.suggest_categorical('scaler_type', ['standard', 'minmax', 'robust', 'identity']),
+    )],
+    freq='H'
+)
     nf.fit(data_train)
     predictions = nf.predict(futr_df=future_exog)
     return root_mean_squared_error(data_test['y'], predictions['NHITS'])
-
 
 if __name__ == '__main__':
     date_start = '2021-01-15'
@@ -194,19 +187,16 @@ if __name__ == '__main__':
     window_train_size = 336  # hours
     forecast_horizon = 24  # hours
     # 336_24, 1440_336, 17520_8760
-    trials = 50
+    trials = 100
     model_name = f'NHITS_{window_train_size}_{forecast_horizon}'
 
     combined_data = loaddataset()
-    neuralforecast_data = prepare_neuralforecast_data(combined_data)
-    data = sample_data_with_train_window(
-        neuralforecast_data, date_start, date_end, window_train_size)
-    data_train, data_test = get_next_window(
-        data, window_train_size, forecast_horizon)
-    
-    future_exog = data[['ds', 'Hour', 'DayOfWeek', 'IsWeekend']].copy()
+    shorthand_data = prepare_neuralforecast_data(combined_data)
+    historic_exog = combined_data[['SpotPriceDKK']]
+    future_exog = shorthand_data[['ds', 'Hour', 'DayOfWeek', 'IsWeekend']].copy()
     future_exog['unique_id'] = 1
-    
+    data_train, data_test = get_next_window(shorthand_data, window_train_size, forecast_horizon)
+
     def safe_objective(trial):
         try:
             return objective_NHITS(trial, data_train, data_test, forecast_horizon, future_exog)

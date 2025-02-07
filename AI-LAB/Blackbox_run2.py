@@ -197,7 +197,6 @@ if __name__ == '__main__':
 
     historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
     future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
-    future_exog.loc[:, 'unique_id'] = 1
 
     warnings.filterwarnings("ignore")
 

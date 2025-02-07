@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import optuna
+import holidays
 
 from neuralforecast import NeuralForecast
 from neuralforecast.models import LSTM, Informer, NHITS, DLinear
@@ -21,7 +22,7 @@ os.environ['NIXTLA_ID_AS_COL'] = '1'
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 
-def loaddataset():
+def loaddataset(start_date, end_date):
     consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
     spot_prices = pd.read_csv('ELSpotPrices.csv', sep=';')
 
@@ -42,19 +43,23 @@ def loaddataset():
     combined_data = combined_data.drop(
         ['HourUTC_x', 'HourUTC_y', 'SpotPriceEUR', 'MunicipalityNo', 'Branche', 'PriceArea'], axis=1)
 
+    dk_holidays = holidays.Denmark(years=list(range(pd.to_datetime(start_date).year, pd.to_datetime(end_date).year + 1)))
+
     combined_data['HourDK'] = pd.to_datetime(combined_data['HourDK'])
     combined_data['Hour'] = combined_data['HourDK'].dt.hour
+    combined_data['HourSin'] = np.sin(2 * np.pi * combined_data['Hour'] / 24)
+    combined_data['HourCos'] = np.cos(2 * np.pi * combined_data['Hour'] / 24)
     combined_data['DayOfWeek'] = combined_data['HourDK'].dt.dayofweek
-    combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([
-                                                                 5, 6]).astype(int)
-    return combined_data
-
-def prepare_neuralforecast_data(combined_data):
+    combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([5, 6]).astype(int)
+    combined_data['IsHoliday'] = combined_data['HourDK'].apply(lambda x: 1 if x.date() in dk_holidays else 0)
+    combined_data['Rolling4h'] = combined_data['ConsumptionkWh'].rolling(window=4, closed='left').mean()
+    combined_data['RollingDay'] = combined_data['ConsumptionkWh'].rolling(window=24, closed='left').mean()
+    combined_data['RollingWeek'] = combined_data['ConsumptionkWh'].rolling(window=24*7, closed='left').mean()
     combined_data = combined_data.reset_index(drop=True)
     combined_data = combined_data.rename(columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
     combined_data['unique_id'] = 1
+    combined_data = combined_data.fillna(0)
     return combined_data
-
 
 def sample_data_with_train_window(df, start_date, end_date, train_window_size):
     start_date = datetime.strptime(
@@ -65,7 +70,6 @@ def sample_data_with_train_window(df, start_date, end_date, train_window_size):
 
 def get_next_window(data, train_window_size, forecast_horizon):
     return data[:train_window_size], data[train_window_size:train_window_size + forecast_horizon]
-
 
 def objective_LSTM(trial, data_train, data_test, forecast_horizon):
     nf = NeuralForecast(
@@ -95,7 +99,6 @@ def objective_LSTM(trial, data_train, data_test, forecast_horizon):
     nf.fit(data_train)
     predictions = nf.predict(data_test)
     return root_mean_squared_error(data_test['y'], predictions['LSTM'])
-
 
 def objective_Informer(trial, data_train, data_test, forecast_horizon):
     nf = NeuralForecast(
@@ -128,7 +131,6 @@ def objective_Informer(trial, data_train, data_test, forecast_horizon):
     predictions = nf.predict(data_test)
     return root_mean_squared_error(data_test['y'], predictions['Informer'])
 
-
 def objective_DLinear(trial, data_train, data_test, forecast_horizon):
     nf = NeuralForecast(
         models=[DLinear(h=forecast_horizon, loss=RMSE(),
@@ -152,14 +154,13 @@ def objective_DLinear(trial, data_train, data_test, forecast_horizon):
     predictions = nf.predict(data_test)
     return root_mean_squared_error(data_test['y'], predictions['DLinear'])
 
-
 def objective_NHITS(trial, data_train, data_test, forecast_horizon, future_exog):
     nf = NeuralForecast(
     models=[NHITS(
         h=forecast_horizon, 
         loss=MAE(), 
-        hist_exog_list=['SpotPriceDKK'], 
-        futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend'],
+        hist_exog_list=['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek'], 
+        futr_exog_list=['Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday'],
         start_padding_enabled=True, 
         n_blocks=5 * [1], 
         mlp_units=5 * [[64, 64]], 
@@ -190,12 +191,11 @@ if __name__ == '__main__':
     trials = 100
     model_name = f'NHITS_{window_train_size}_{forecast_horizon}'
 
-    combined_data = loaddataset()
-    shorthand_data = prepare_neuralforecast_data(combined_data)
-    historic_exog = combined_data[['SpotPriceDKK']]
-    future_exog = shorthand_data[['ds', 'Hour', 'DayOfWeek', 'IsWeekend']].copy()
-    future_exog['unique_id'] = 1
-    data_train, data_test = get_next_window(shorthand_data, window_train_size, forecast_horizon)
+    data = loaddataset(date_start, date_end)
+    historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
+    future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
+
+    data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
 
     def safe_objective(trial):
         try:
@@ -208,20 +208,19 @@ if __name__ == '__main__':
     study1 = optuna.create_study(direction='minimize')
     study1.optimize(safe_objective, n_trials=trials)
 
-    trial = study1.best_trial
-    print(f"Accuracy: {trial.value}")
-    print(f"best params for {model_name}: {trial.params}")
+    best_trial = study1.best_trial
+    print(f"Accuracy: {best_trial.value}")
+    print(f"best params for {model_name}: {best_trial.params}")
     warnings.filterwarnings("default")
 
     # Save the results in CSV
-    if trial.value != float('inf'):
+    if best_trial.value != float('inf'):
         try:
             df_tuning = pd.read_csv('blackbox_tuning.csv')
         except:
             df_tuning = pd.DataFrame(columns=['model', 'accuracy', 'params'])
 
-        new_row = {'model': model_name, 'accuracy': trial.value,
-                   'params': str(trial.params)}
+        new_row = {'model': model_name, 'accuracy': best_trial.value, 'params': str(best_trial.params)}
         new_row_df = pd.DataFrame([new_row]).dropna(axis=1, how='all')
         df_tuning = pd.concat([df_tuning, new_row_df], ignore_index=True)
         df_tuning = df_tuning.sort_values(

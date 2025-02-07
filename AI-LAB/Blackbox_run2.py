@@ -62,7 +62,7 @@ def loaddataset(start_date, end_date):
     combined_data = combined_data.drop(
         ['HourUTC_x', 'HourUTC_y', 'SpotPriceEUR', 'MunicipalityNo', 'Branche', 'PriceArea'], axis=1)
 
-    dk_holidays = holidays.Denmark(years=list(range(start_date.year, end_date.year + 1)))
+    dk_holidays = holidays.Denmark(years=list(range(pd.to_datetime(start_date).year, pd.to_datetime(end_date).year + 1)))
 
     combined_data['HourDK'] = pd.to_datetime(combined_data['HourDK'])
     combined_data['Hour'] = combined_data['HourDK'].dt.hour
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
     results = np.array([])
 
-    data = loaddataset(pd.to_datetime(date_start), pd.to_datetime(date_end))
+    data = loaddataset(date_start, date_end)
 
     historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
     future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()

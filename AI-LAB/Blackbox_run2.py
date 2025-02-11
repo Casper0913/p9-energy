@@ -198,7 +198,7 @@ if __name__ == '__main__':
     historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
     future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
 
-    # warnings.filterwarnings("ignore")
+    warnings.filterwarnings("ignore")
 
     start_time = time.time()
 
@@ -206,7 +206,7 @@ if __name__ == '__main__':
 
     model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), hist_exog_list=['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek'], futr_exog_list=['Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday'])
     try:
-        nf = NeuralForecast(models=[model], freq='H')
+        nf = NeuralForecast(models=[model], freq='h')
         nf.fit(data_train)
         predictions = nf.predict(futr_df=future_exog)
         predictions.columns = predictions.columns.str.replace('-median', '')
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     end_time = time.time()
 
-    # warnings.filterwarnings("default")
+    warnings.filterwarnings("default")
 
     df_true = df.loc[(df.index >= '2021-01-15 00:00:00') & (df.index <= '2021-01-15 23:00:00')]
     df_predictions = pd.DataFrame(results)

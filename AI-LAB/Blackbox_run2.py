@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     window_train_size = 336
     forecast_horizon = 24
-    config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
+    config_name = f'high_{model_name}_{window_train_size}_{forecast_horizon}'
     results = np.array([])
 
     data = loaddataset(date_start, date_end)

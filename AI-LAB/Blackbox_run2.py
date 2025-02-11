@@ -198,7 +198,7 @@ if __name__ == '__main__':
     historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
     future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
 
-    warnings.filterwarnings("ignore")
+    # warnings.filterwarnings("ignore")
 
     start_time = time.time()
 
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     end_time = time.time()
 
-    warnings.filterwarnings("default")
+    # warnings.filterwarnings("default")
 
     df_true = df.loc[(df.index >= '2021-01-15 00:00:00') & (df.index <= '2021-01-15 23:00:00')]
     df_predictions = pd.DataFrame(results)

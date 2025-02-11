@@ -184,7 +184,7 @@ def config_nhits(trial):
     }
 
 if __name__ == '__main__':
-    model_name = 'NHITS'
+    model_name = 'AutoNHITS'
     date_start = '2021-01-15'
     date_end = '2021-02-01'
 

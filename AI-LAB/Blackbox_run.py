@@ -3,6 +3,7 @@ import math
 import numpy as np
 import pandas as pd
 import time
+import holidays
 
 from ray import tune
 import optuna
@@ -40,7 +41,7 @@ df.drop(columns=['HourUTC', 'HourDK',
         'MunicipalityNo', 'Branche'], inplace=True)
 
 
-def loaddataset():
+def loaddataset(start_date, end_date):
     consumption = pd.read_csv('ConsumptionIndustry.csv', sep=';')
     spot_prices = pd.read_csv('ELSpotPrices.csv', sep=';')
 
@@ -61,17 +62,22 @@ def loaddataset():
     combined_data = combined_data.drop(
         ['HourUTC_x', 'HourUTC_y', 'SpotPriceEUR', 'MunicipalityNo', 'Branche', 'PriceArea'], axis=1)
 
+    dk_holidays = holidays.Denmark(years=list(range(pd.to_datetime(start_date).year, pd.to_datetime(end_date).year + 1)))
+
     combined_data['HourDK'] = pd.to_datetime(combined_data['HourDK'])
     combined_data['Hour'] = combined_data['HourDK'].dt.hour
+    # combined_data['HourSin'] = np.sin(2 * np.pi * combined_data['Hour'] / 24)
+    # combined_data['HourCos'] = np.cos(2 * np.pi * combined_data['Hour'] / 24)
     combined_data['DayOfWeek'] = combined_data['HourDK'].dt.dayofweek
-    combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([
-                                                                 5, 6]).astype(int)
-    return combined_data
-
-def prepare_neuralforecast_data(combined_data):
+    combined_data['IsWeekend'] = combined_data['DayOfWeek'].isin([5, 6]).astype(int)
+    combined_data['IsHoliday'] = combined_data['HourDK'].apply(lambda x: 1 if x.date() in dk_holidays else 0)
+    # combined_data['Rolling4h'] = combined_data['ConsumptionkWh'].rolling(window=4, closed='left').mean()
+    # combined_data['RollingDay'] = combined_data['ConsumptionkWh'].rolling(window=24, closed='left').mean()
+    # combined_data['RollingWeek'] = combined_data['ConsumptionkWh'].rolling(window=24*7, closed='left').mean()
     combined_data = combined_data.reset_index(drop=True)
     combined_data = combined_data.rename(columns={'HourDK': 'ds', 'ConsumptionkWh': 'y'})
     combined_data['unique_id'] = 1
+    combined_data = combined_data.fillna(0)
     return combined_data
 
 def prepare_statsforecast_data(combined_data):
@@ -178,7 +184,7 @@ def config_nhits(trial):
     }
 
 if __name__ == '__main__':
-    model_name = 'AutoNHITS'
+    model_name = 'NHITS'
     date_start = '2021-01-15'
     date_end = '2021-02-01'
 
@@ -187,22 +193,20 @@ if __name__ == '__main__':
     config_name = f'{model_name}_{window_train_size}_{forecast_horizon}'
     results = np.array([])
 
-    combined_data = loaddataset()
-    shorthand_data = prepare_neuralforecast_data(combined_data)
-    historic_exog = combined_data[['SpotPriceDKK']]
-    future_exog = combined_data[['Hour', 'DayOfWeek', 'IsWeekend']]
+    data = loaddataset(date_start, date_end)
+
+    # historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
+    # future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
 
     warnings.filterwarnings("ignore")
 
     start_time = time.time()
 
-    data_train, data_test = get_next_window(shorthand_data, window_train_size, forecast_horizon)
+    data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
 
-    model = AutoNHITS(h=forecast_horizon, config=config_nhits, loss=MAE(), backend='optuna', num_samples=100)
-    model2 = NHITS(h=forecast_horizon, input_size=2,  loss=MAE(), hist_exog_list=historic_exog, futr_exog_list=future_exog)
-
+    model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), random_seed=1)
     try:
-        nf = NeuralForecast(models=[model], freq='H')
+        nf = NeuralForecast(models=[model], freq='h')
         nf.fit(data_train)
         predictions = nf.predict()
         predictions.columns = predictions.columns.str.replace('-median', '')
@@ -221,4 +225,4 @@ if __name__ == '__main__':
 
     save_prediction_and_stats(runtime=end_time - start_time, config_name=config_name, df_predictions=df_predictions, df_true=df_true, prediction_path=f'{config_name}.csv', stats_path=f'blackbox_run_stats.csv')
 
-    plot_series(shorthand_data.head(window_train_size + len(predictions)), predictions) #plot_random=False, max_insample_length=48 * 3, level=[80, 90]
+    plot_series(data.head(window_train_size + len(predictions)), predictions) #plot_random=False, max_insample_length=48 * 3, level=[80, 90]

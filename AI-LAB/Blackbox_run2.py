@@ -204,7 +204,7 @@ if __name__ == '__main__':
 
     data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
 
-    model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), hist_exog_list=['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek'], futr_exog_list=['Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday'])
+    model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), random_seed=1, hist_exog_list=['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek'], futr_exog_list=['Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday'])
     try:
         nf = NeuralForecast(models=[model], freq='h')
         nf.fit(data_train)

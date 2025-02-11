@@ -195,8 +195,7 @@ if __name__ == '__main__':
 
     data = loaddataset(date_start, date_end)
 
-    # historic_exog = data[['SpotPriceDKK', 'Rolling4h', 'RollingDay', 'RollingWeek']].copy()
-    # future_exog = data[['unique_id', 'ds', 'Hour', 'HourSin', 'HourCos', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
+    future_exog = data[['unique_id', 'ds', 'Hour', 'DayOfWeek', 'IsWeekend', 'IsHoliday']].copy()
 
     warnings.filterwarnings("ignore")
 
@@ -204,11 +203,11 @@ if __name__ == '__main__':
 
     data_train, data_test = get_next_window(data, window_train_size, forecast_horizon)
 
-    model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), random_seed=1)
+    model = NHITS(h=forecast_horizon, input_size=2, loss=MAE(), random_seed=1, hist_exog_list=['SpotPriceDKK'], futr_exog_list=['Hour', 'DayOfWeek', 'IsWeekend', 'IsHoliday'])
     try:
         nf = NeuralForecast(models=[model], freq='h')
         nf.fit(data_train)
-        predictions = nf.predict()
+        predictions = nf.predict(futr_df=future_exog)
         predictions.columns = predictions.columns.str.replace('-median', '')
     except Exception as e:
         raise RuntimeError(e)

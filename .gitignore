@@ -1,5 +1,8 @@
-
+/lightning_logs
 .DS_Store
-.DS_Store
-
-/Models/Training_data/runs  
+.vscode/settings.json
+SDU Dataset/SmartCharging_2020_to_2032/Household data.csv
+SDU Dataset/DumbCharging_2020_to_2032/Household data.csv
+/Models
+/Predictions
+/checkpoints
